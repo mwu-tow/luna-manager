@@ -59,7 +59,8 @@ unresolvedDepError = toException UnresolvedDepError
 --        - We should keep sha of whole yaml and keep it separate on server, so yamls could be cached locally and we can check if they are up to date with VERY low bandwich
 
 -- === Definition === --
-data AppType = BatchApp | GuiApp | Lib deriving (Show, Generic, Eq)
+data AppType      = BatchApp BatchAppType | GuiApp | Lib deriving (Show, Generic, Eq)
+data BatchAppType = Regular | Manager deriving (Show, Generic, Eq)
 
 
 -- Core
@@ -196,11 +197,13 @@ generateConfigYamlWithNewPackage repo packageYaml = saveYamlToFile $ repoUnion r
 
 -- JSON
 instance ToJSON   AppType        where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
+instance ToJSON   BatchAppType   where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   Repo           where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   Package        where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   PackageDesc    where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   PackageHeader  where toEncoding = JSON.toEncoding . showPretty; toJSON = JSON.toJSON . showPretty
 instance FromJSON AppType        where parseJSON  = lensJSONParse
+instance FromJSON BatchAppType   where parseJSON  = lensJSONParse
 instance FromJSON Repo           where parseJSON  = lensJSONParse
 instance FromJSON Package        where parseJSON  = lensJSONParse
 instance FromJSON PackageDesc    where parseJSON  = lensJSONParse
