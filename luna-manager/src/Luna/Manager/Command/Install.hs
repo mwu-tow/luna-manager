@@ -174,9 +174,9 @@ checkIfAppAlreadyInstalledInCurrentVersion installPath appType pkgVersion = do
             then liftIO $ exitSuccess
             else checkIfAppAlreadyInstalledInCurrentVersion installPath appType pkgVersion
 
-data SolvePackagePathException = SolvePackagePathException Text deriving (Show)
-instance Exception SolvePackagePathException where
-    displayException (SolvePackagePathException file) = "Couldn't download file: " <> convert file <> " invalid URI address"
+data ResolvePackagePathException = ResolvePackagePathException Text deriving (Show)
+instance Exception ResolvePackagePathException where
+    displayException (ResolvePackagePathException file) = "Couldn't download file: " <> convert file <> " invalid URI address"
 
 downloadIfUri :: MonadInstall m => URIPath -> m FilePath
 downloadIfUri path = do
@@ -184,7 +184,7 @@ downloadIfUri path = do
     if doesFileExist then return $ fromText path
         else if URI.isURI $ convert path
             then downloadWithProgressBar path
-            else throwM $ SolvePackagePathException path
+            else throwM $ ResolvePackagePathException path
 
 downloadAndUnpackApp :: MonadInstall m => URIPath -> FilePath -> Text -> AppType -> Version -> m ()
 downloadAndUnpackApp pkgPath installPath appName appType pkgVersion = do
