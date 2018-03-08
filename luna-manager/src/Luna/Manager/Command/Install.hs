@@ -209,10 +209,10 @@ downloadAndUnpackApp pkgPath installPath appName appType pkgVersion = do
          Linux   -> do
              Shelly.mkdir_p installPath
              Shelly.mv unpacked $ installPath </> convert appName
-             _  -> if appType == (BatchApp Manager) then do
-                 Shelly.mkdir_p installPath
-                 Shelly.mv unpacked $ installPath </> convert appName
-                 else Shelly.mv unpacked installPath
+         _  -> if appType == (BatchApp Manager) then do
+             Shelly.mkdir_p installPath
+             Shelly.mv unpacked $ installPath </> convert appName
+             else Shelly.mv unpacked installPath
 
 linkingCurrent :: MonadInstall m => AppType -> FilePath -> m ()
 linkingCurrent appType installPath = do
@@ -400,8 +400,8 @@ installApp opts package = do
         appType    = package ^. resolvedAppType
     binPath     <- if guiInstaller then return $ toTextIgnore $
         case appType of
-                GuiApp   -> installConfig ^. defaultBinPathGuiApp
-                BatchApp -> installConfig ^. defaultBinPathBatchApp
+                GuiApp     -> installConfig ^. defaultBinPathGuiApp
+                BatchApp _ -> installConfig ^. defaultBinPathBatchApp
         else askLocation opts appType pkgName
     installApp' binPath package
 
