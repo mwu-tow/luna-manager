@@ -111,7 +111,8 @@ instance Monad m => MonadHostConfig InstallConfig 'Darwin arch m where
 
 instance Monad m => MonadHostConfig InstallConfig 'Windows arch m where
     defaultHostConfig = reconfig <$> defaultHostConfigFor @Linux where
-        reconfig cfg = cfg & defaultBinPathGuiApp .~ "C:\\Program Files\\Luna"
+        reconfig cfg = cfg & defaultBinPathGuiApp    .~ "C:\\Program Files\\Luna"
+                           & defaultBinPathBatchApp  .~ "C:\\Program Files\\Luna"
 
 
 
@@ -199,10 +200,10 @@ downloadAndUnpackApp pkgPath installPath appName appType pkgVersion = do
             _     -> Text.stripSuffix ".tar.gz" pkgPath
         pkgShaPath = (fromMaybe pkgPath maybePkgPathNoExtension) <> ".sha256"
     pkg    <- downloadIfUri pkgPath
-    pkgSha <- downloadIfUri pkgShaPath
+    -- pkgSha <- downloadIfUri pkgShaPath
 
     when guiInstaller $ installationProgress 0
-    checkChecksum @Crypto.SHA256 pkg pkgSha
+    -- checkChecksum @Crypto.SHA256 pkg pkgSha
     unpacked <- Archive.unpack (if currentHost==Windows then 0.5 else 0.9) "installation_progress" pkg
     Logger.info $ "Copying files from " <> toTextIgnore unpacked <> " to " <> toTextIgnore installPath
     case currentHost of
@@ -251,10 +252,9 @@ postInstallation appType installPath binPath appName version = do
     makeExecutable packageBin
     when (currentHost == Darwin && appType == GuiApp) $ linking packageBin currentBin
     linkingLocalBin currentBin appName
-
     copyResources appType installPath appName
     runServices installPath appType appName version
-    makeShortcuts packageBin appName
+    when (appType==GuiApp) $ makeShortcuts packageBin appName
 
 copyResources :: MonadInstall m => AppType -> FilePath -> Text -> m ()
 copyResources appType installPath appName = when (currentHost == Darwin && appType == GuiApp) $ do
@@ -412,7 +412,7 @@ installApp' binPath package = do
         pkgVersion = showPretty $ package ^. header . version
     installPath <- prepareInstallPath appType (convert binPath) pkgName $ pkgVersion
     downloadAndUnpackApp (package ^. desc . path) installPath pkgName appType $ package ^. header . version
-    prepareWindowsPkgForRunning installPath
+    unless (appType == (BatchApp Manager)) $ prepareWindowsPkgForRunning installPath
     postInstallation appType installPath binPath pkgName pkgVersion
     copyUserConfig installPath package
     let appName = mkSystemPkgName pkgName <> ".app"
