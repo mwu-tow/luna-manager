@@ -392,8 +392,8 @@ askLocation opts appType appName = do
         & defArg .~ Just (toTextIgnore pkgInstallDefPath)
     return binPath
 
-installApp :: MonadInstall m => InstallOpts -> ResolvedPackage -> m ()
-installApp opts package = do
+installApp :: MonadInstall m => InstallOpts -> Bool -> ResolvedPackage -> m ()
+installApp opts isMainApp package = do
     installConfig <- get @InstallConfig
     guiInstaller  <- Opts.guiInstallerOpt
     let pkgName    = package ^. header . name
@@ -402,7 +402,17 @@ installApp opts package = do
         case appType of
                 GuiApp     -> installConfig ^. defaultBinPathGuiApp
                 BatchApp _ -> installConfig ^. defaultBinPathBatchApp
-        else askLocation opts appType pkgName
+        else case currentHost of
+            Darwin -> askLocation opts appType pkgName
+            _      -> if isMainApp then do
+                path <- askLocation opts appType pkgName
+                modify_ @InstallConfig (defaultBinPathGuiApp   .~ fromText path)
+                modify_ @InstallConfig (defaultBinPathBatchApp .~ fromText path)
+                return path
+                else return $ toTextIgnore $
+                    case appType of
+                            GuiApp     -> installConfig ^. defaultBinPathGuiApp
+                            BatchApp _ -> installConfig ^. defaultBinPathBatchApp
     installApp' binPath package
 
 installApp' :: MonadInstall m => Text -> ResolvedPackage -> m ()
@@ -493,8 +503,9 @@ run opts = do
                 resolvedApp   = ResolvedPackage (PackageHeader appName appVersion) appDesc (appPkg ^. appType)
                 allApps       = resolvedApp : appsToInstall
             Logger.logObject "[run] allApps" allApps
-
-            mapM_ (installApp opts) $ allApps
+            installApp opts True resolvedApp
+            mapM_ (installApp opts False) appsToInstall
+            -- mapM_ (installApp opts) $ allApps
             print $ encode $ InstallationProgress 1
             liftIO $ hFlush stdout
             askToRunApp appName (showPretty appVersion) (appPkg ^. appType)
@@ -531,6 +542,8 @@ run opts = do
 
                 resolvedApp = ResolvedPackage (PackageHeader appName version) appPkgDesc (appPkg ^. appType)
                 allApps = resolvedApp : appsToInstall
-            mapM_ (installApp opts) $ allApps
+            installApp opts True resolvedApp
+            mapM_ (installApp opts False) appsToInstall
+            -- mapM_ (installApp opts) $ allApps
 
             askToRunApp appName appVersion (appPkg ^. appType)
