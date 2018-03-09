@@ -59,8 +59,8 @@ unresolvedDepError = toException UnresolvedDepError
 --        - We should keep sha of whole yaml and keep it separate on server, so yamls could be cached locally and we can check if they are up to date with VERY low bandwich
 
 -- === Definition === --
-data AppType      = BatchApp BatchAppType | GuiApp | Lib deriving (Show, Generic, Eq)
-data BatchAppType = Regular | Manager deriving (Show, Generic, Eq)
+data AppType      = BatchApp BatchAppType | GuiApp | Lib deriving (Show, Generic, Eq, Read)
+data BatchAppType = Regular | Manager deriving (Show, Generic, Eq, Read)
 
 
 -- Core
@@ -196,13 +196,13 @@ generateConfigYamlWithNewPackage repo packageYaml = saveYamlToFile $ repoUnion r
 -- === Instances === --
 
 -- JSON
-instance ToJSON   AppType        where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
+instance ToJSON   AppType        where toEncoding = JSON.toEncoding . showPretty; toJSON = JSON.toJSON . showPretty
 instance ToJSON   BatchAppType   where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   Repo           where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   Package        where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   PackageDesc    where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
 instance ToJSON   PackageHeader  where toEncoding = JSON.toEncoding . showPretty; toJSON = JSON.toJSON . showPretty
-instance FromJSON AppType        where parseJSON  = lensJSONParse
+instance FromJSON AppType        where parseJSON  = either (fail . convert) return . readPretty <=< parseJSON
 instance FromJSON BatchAppType   where parseJSON  = lensJSONParse
 instance FromJSON Repo           where parseJSON  = lensJSONParse
 instance FromJSON Package        where parseJSON  = lensJSONParse
@@ -215,6 +215,13 @@ instance Pretty PackageHeader where
     readPretty t = mapLeft (const "Conversion error") $ PackageHeader s <$> readPretty ss where
         (s,ss) = Text.breakOnEnd "-" t & _1 %~ Text.init
 
+instance Pretty AppType where
+    showPretty (BatchApp t) = "BatchApp" <> "." <> (Text.pack $ show t)
+    showPretty GuiApp = "GuiApp"
+    showPretty Lib = "Lib"
+    readPretty t = case Text.splitOn "." t of
+        [a,b] -> mapLeft convert $ BatchApp <$> tryReads b
+        [a]   -> mapLeft (const "Conversion error") $ tryReads a
 
 
 -----------------------------------
