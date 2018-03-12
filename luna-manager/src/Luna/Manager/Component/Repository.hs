@@ -212,16 +212,18 @@ instance FromJSON PackageHeader  where parseJSON  = either (fail . convert) retu
 -- Show
 instance Pretty PackageHeader where
     showPretty (PackageHeader n v) = n <> "-" <> showPretty v
-    readPretty t = mapLeft (const "Conversion error") $ PackageHeader s <$> readPretty ss where
+
+    readPretty t = mapLeft (const "Conversion error. Couldn't read PackageHeader.") $ PackageHeader s <$> readPretty ss where
         (s,ss) = Text.breakOnEnd "-" t & _1 %~ Text.init
 
+
 instance Pretty AppType where
-    showPretty (BatchApp t) = "BatchApp" <> "." <> (Text.pack $ show t)
-    showPretty GuiApp = "GuiApp"
-    showPretty Lib = "Lib"
+    showPretty (BatchApp t) = "BatchApp." <> Text.pack (show t)
+    showPretty a            = Text.pack $ show a
+
     readPretty t = case Text.splitOn "." t of
         [a,b] -> mapLeft convert $ BatchApp <$> tryReads b
-        [a]   -> mapLeft (const "Conversion error") $ tryReads a
+        [a]   -> mapLeft (const "Conversion error. Couldn't read AppType.") $ tryReads a
 
 
 -----------------------------------

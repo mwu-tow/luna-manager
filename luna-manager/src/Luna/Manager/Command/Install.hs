@@ -198,7 +198,9 @@ downloadAndUnpackApp pkgPath installPath appName appType pkgVersion = do
     let maybePkgPathNoExtension = case currentHost of
             Linux   -> Text.stripSuffix ".AppImage" pkgPath
             Darwin  -> Text.stripSuffix ".tar.gz" pkgPath
-            Windows -> Text.stripSuffix ".tar.gz" pkgPath
+            Windows -> if Text.isSuffixOf ".tar.gz" pkgPath
+                then Text.stripSuffix ".tar.gz" pkgPath
+                else Text.stripSuffix ".exe" pkgPath
         pkgShaPath = (fromMaybe pkgPath maybePkgPathNoExtension) <> ".sha256"
     pkg    <- downloadIfUri pkgPath
     pkgSha <- downloadIfUri pkgShaPath
