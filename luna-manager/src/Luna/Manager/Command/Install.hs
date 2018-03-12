@@ -150,10 +150,10 @@ prepareInstallPath :: MonadInstall m => AppType -> FilePath -> Text -> Text -> m
 prepareInstallPath appType appPath appName appVersion = expand $ case currentHost of
     Linux   -> appPath </> convert appName </> convert appVersion
     Windows -> case appType of
-        GuiApp   -> appPath </> convert (mkSystemPkgName appName) </> convert appVersion
+        GuiApp     -> appPath </> convert (mkSystemPkgName appName) </> convert appVersion
         BatchApp _ -> appPath </> convert appName </> convert appVersion
     Darwin  -> case appType of
-        GuiApp   -> appPath </> convert ((mkSystemPkgName appName) <> ".app") </> "Contents" </> "Resources" </> convert appVersion
+        GuiApp     -> appPath </> convert ((mkSystemPkgName appName) <> ".app") </> "Contents" </> "Resources" </> convert appVersion
         BatchApp _ -> appPath </> convert appName </> convert appVersion
 
 data TheSameVersionException = TheSameVersionException Version  deriving (Show)
@@ -196,14 +196,15 @@ downloadAndUnpackApp pkgPath installPath appName appType pkgVersion = do
     when guiInstaller $ downloadProgress (Progress 0 1)
     Shelly.mkdir_p $ parent installPath
     let maybePkgPathNoExtension = case currentHost of
-            Linux -> Text.stripSuffix ".AppImage" pkgPath
-            _     -> Text.stripSuffix ".tar.gz" pkgPath
+            Linux   -> Text.stripSuffix ".AppImage" pkgPath
+            Darwin  -> Text.stripSuffix ".tar.gz" pkgPath
+            Windows -> Text.stripSuffix ".tar.gz" pkgPath
         pkgShaPath = (fromMaybe pkgPath maybePkgPathNoExtension) <> ".sha256"
     pkg    <- downloadIfUri pkgPath
-    -- pkgSha <- downloadIfUri pkgShaPath
+    pkgSha <- downloadIfUri pkgShaPath
 
     when guiInstaller $ installationProgress 0
-    -- checkChecksum @Crypto.SHA256 pkg pkgSha
+    checkChecksum @Crypto.SHA256 pkg pkgSha
     unpacked <- Archive.unpack (if currentHost==Windows then 0.5 else 0.9) "installation_progress" pkg
     Logger.info $ "Copying files from " <> toTextIgnore unpacked <> " to " <> toTextIgnore installPath
     case currentHost of
@@ -385,7 +386,7 @@ askLocation :: (MonadStates '[EnvConfig, InstallConfig, RepoConfig] m, MonadNetw
 askLocation opts appType appName = do
     installConfig <- get @InstallConfig
     let pkgInstallDefPath = case appType of
-            GuiApp   -> installConfig ^. defaultBinPathGuiApp
+            GuiApp     -> installConfig ^. defaultBinPathGuiApp
             BatchApp _ -> installConfig ^. defaultBinPathBatchApp
     binPath <- askOrUse (opts ^. Opts.selectedInstallationPath)
         $ question ("Select installation path for " <> appName) plainTextReader
@@ -422,7 +423,7 @@ installApp' binPath package = do
         pkgVersion = showPretty $ package ^. header . version
     installPath <- prepareInstallPath appType (convert binPath) pkgName $ pkgVersion
     downloadAndUnpackApp (package ^. desc . path) installPath pkgName appType $ package ^. header . version
-    unless (appType == (BatchApp Manager)) $ prepareWindowsPkgForRunning installPath
+    unless (appType == BatchApp Manager) $ prepareWindowsPkgForRunning installPath
     postInstallation appType installPath binPath pkgName pkgVersion
     copyUserConfig installPath package
     let appName = mkSystemPkgName pkgName <> ".app"
@@ -501,8 +502,6 @@ run opts = do
                 raise' e
             let appsToInstall = filter (( <$> (^. header . name)) (`elem` (repo ^.apps))) pkgsToInstall
                 resolvedApp   = ResolvedPackage (PackageHeader appName appVersion) appDesc (appPkg ^. appType)
-                allApps       = resolvedApp : appsToInstall
-            Logger.logObject "[run] allApps" allApps
             installApp opts True resolvedApp
             mapM_ (installApp opts False) appsToInstall
             -- mapM_ (installApp opts) $ allApps
@@ -541,9 +540,7 @@ run opts = do
             let appsToInstall = filter (( <$> (^. header . name)) (`elem` (repo ^.apps))) pkgsToInstall
 
                 resolvedApp = ResolvedPackage (PackageHeader appName version) appPkgDesc (appPkg ^. appType)
-                allApps = resolvedApp : appsToInstall
             installApp opts True resolvedApp
             mapM_ (installApp opts False) appsToInstall
-            -- mapM_ (installApp opts) $ allApps
 
             askToRunApp appName appVersion (appPkg ^. appType)
