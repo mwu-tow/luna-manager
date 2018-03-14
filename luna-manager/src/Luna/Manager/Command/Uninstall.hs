@@ -9,10 +9,12 @@ import qualified Data.Text                    as Text
 import           Filesystem.Path.CurrentOS    (FilePath, (</>), decodeString, splitDirectories)
 import qualified Safe
 import qualified System.Directory             as Dir
+import qualified System.Environment           as Environment
 
 import           Control.Monad.State.Layered
 import qualified Luna.Manager.Command.Install as Install
 import           Luna.Manager.Command.Options (Options)
+import qualified Luna.Manager.Command.Options as Options
 import qualified Luna.Manager.Logger          as Logger
 import           Luna.Manager.System          (stopServicesWindows)
 import           Luna.Manager.System.Env
@@ -24,7 +26,8 @@ import           Luna.Manager.Shell.Shelly    (MonadSh, MonadShControl)
 
 default(Text.Text)
 
-type MonadUninstall m = (MonadIO m, MonadSh m, MonadShControl m, MonadCatch m, MonadGetter Install.InstallConfig m, MonadGetter Options m, MonadGetter EnvConfig m)
+type MonadUninstall m = (MonadIO m, MonadSh m, MonadShControl m, MonadCatch m, MonadGetter Install.InstallConfig m,
+                         MonadGetter Options m, MonadSetter Options m, MonadGetter EnvConfig m)
 
 lunaStudio :: IsString s => s
 lunaStudio = "LunaStudio"
@@ -106,7 +109,7 @@ uninstallElectronCaches = do
 uninstallStartMenuEntry :: MonadUninstall m => m ()
 uninstallStartMenuEntry = case currentHost of
     Windows ->  do
-        appdata <- Text.pack <$> liftIO (Dir.getAppUserDataDirectory "")
+        appdata <- Text.pack <$> liftIO (Environment.getEnv "appdata")
         Logger.log "Removing Luna Studio shortcut in Start Menu"
         let shortcut = Shelly.fromText appdata
                    </> "Microsoft"
@@ -117,10 +120,11 @@ uninstallStartMenuEntry = case currentHost of
         Shelly.rm_rf shortcut `Exception.catchAny` (\(e::SomeException) ->
             Logger.warning $ "Removing Luna Studio shortcut in " <> Shelly.toTextIgnore shortcut <> " failed "
             <> "because of " <> convert (displayException e) <> ". Continuing...")
-    Linux -> do
+    Linux   -> do
         -- TODO[MM]: respect $XDG_DATA_HOME after a change in runner
-        let desktopFilesDir = "~/.local/share/applications"
-        desktops <- Shelly.ls desktopFilesDir
+        userDir <- (Shelly.fromText . Text.pack) <$> liftIO Dir.getHomeDirectory
+        let desktopFilesDir = ".local/share/applications"
+        desktops <- Shelly.ls $ userDir </> desktopFilesDir
         -- see a NOTE in createdByLunaStudio
         let lunaStudioFiles = filter createdByLunaStudio desktops
         Logger.log "Removing Luna Studio .desktop files from ~/.local/share/applications"
@@ -128,9 +132,11 @@ uninstallStartMenuEntry = case currentHost of
             Shelly.rm_rf desktop `Exception.catchAny` (\(e::SomeException) ->
                 Logger.warning $ "Removing Luna Studio shortcut in " <> Shelly.toTextIgnore desktop <> " failed "
                 <> "because of " <> convert (displayException e) <> ". Continuing...")
+    _       -> return ()
 
 run :: MonadUninstall m => m ()
 run = do
+    modify_ @Options $ Options.globals . Options.verbose .~ True
     conf <- get @Install.InstallConfig
     uninstallServices conf
     uninstallApp conf

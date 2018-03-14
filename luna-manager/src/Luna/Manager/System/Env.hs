@@ -4,6 +4,7 @@ module Luna.Manager.System.Env where
 
 import Prologue hiding (FilePath, fromText, toText)
 
+import           Luna.Manager.Command.Options
 import           Luna.Manager.System.Host
 import qualified Shelly.Lifted as Shelly
 import           Shelly.Lifted (MonadSh)
@@ -11,7 +12,8 @@ import           Filesystem.Path.CurrentOS
 import           Control.Monad.State.Layered
 import qualified System.Directory as System
 import           Control.Monad.Raise
-import           System.IO.Error
+import           System.IO.Error (isAlreadyExistsError)
+import           System.IO.Temp  (createTempDirectory)
 
 --------------------------
 -- === EnvConfig === --
@@ -32,15 +34,17 @@ getHomePath = fromText . convert <$> liftIO System.getHomeDirectory
 getCurrentPath :: MonadIO m => m FilePath
 getCurrentPath = fromText . convert <$> liftIO System.getCurrentDirectory
 
-getTmpPath, getDownloadPath :: (MonadIO m, MonadGetter EnvConfig m, MonadSh m) => m FilePath
+getTmpPath, getDownloadPath :: (MonadIO m, MonadGetters '[Options, EnvConfig] m, MonadSh m) => m FilePath
 getDownloadPath = getTmpPath
 getTmpPath      = do
-    tmp <- view localTempPath <$> get @EnvConfig
+    userTmpPath <- gets @Options   (globals.selectedTmpPath)
+    cfgTmpPath  <- gets @EnvConfig localTempPath
+    let tmp = fromMaybe cfgTmpPath $ fromText <$> userTmpPath
     Shelly.mkdir_p tmp
     return tmp
 
 
-setTmpCwd :: (MonadGetter EnvConfig m, MonadIO m, MonadSh m) => m ()
+setTmpCwd :: (MonadGetters '[Options, EnvConfig] m, MonadIO m, MonadSh m) => m ()
 setTmpCwd = liftIO . System.setCurrentDirectory . encodeString =<< getTmpPath
 
 createSymLink ::  MonadIO m => FilePath -> FilePath -> m ()
@@ -79,9 +83,12 @@ copyDir src dst = do
 -- === Instances === --
 
 instance {-# OVERLAPPABLE #-} MonadIO m => MonadHostConfig EnvConfig sys arch m where
-    defaultHostConfig = EnvConfig <$> tmp where
-        tmp = (</> "luna") <$> decodeString <$> liftIO System.getTemporaryDirectory
+    defaultHostConfig = do
+        sysTmp  <- liftIO System.getTemporaryDirectory
+        lunaTmp <- liftIO $ createTempDirectory sysTmp "luna"
+        return $ EnvConfig $ decodeString lunaTmp
 
 instance {-# OVERLAPPABLE #-} MonadIO m => MonadHostConfig EnvConfig 'Windows arch m where
     -- | Too long paths are often problem on Windows, therefore we use C:\tmp to store temporary data
-    defaultHostConfig = return $ EnvConfig "C:\\tmp\\luna"
+    defaultHostConfig = EnvConfig <$> lunaTmp where
+        lunaTmp = decodeString <$> (liftIO $ createTempDirectory "C:\\tmp" "luna")
