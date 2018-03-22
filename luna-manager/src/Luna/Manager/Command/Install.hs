@@ -213,10 +213,10 @@ downloadAndUnpackApp pkgPath installPath appName appType pkgVersion = do
          Linux   -> do
              Shelly.mkdir_p installPath
              Shelly.mv unpacked $ installPath </> convert appName
-         _  -> if appType == (BatchApp Manager) then do
+         _  -> if appType == BatchApp Manager then do
              Shelly.mkdir_p installPath
              Shelly.mv unpacked $ installPath </> convert appName
-             else Shelly.mv unpacked installPath
+                else Shelly.mv unpacked installPath
 
 linkingCurrent :: MonadInstall m => AppType -> FilePath -> m ()
 linkingCurrent appType installPath = do
@@ -395,27 +395,30 @@ askLocation opts appType appName = do
         & defArg .~ Just (toTextIgnore pkgInstallDefPath)
     return binPath
 
-installApp :: MonadInstall m => InstallOpts -> Bool -> ResolvedPackage -> m ()
-installApp opts isMainApp package = do
+defBinPath :: MonadInstall m => AppType -> m Text
+defBinPath appType = do
+    installConfig <- get @InstallConfig
+    case appType of
+        GuiApp     -> return $ toTextIgnore $ installConfig ^. defaultBinPathGuiApp
+        BatchApp _ -> return $ toTextIgnore $ installConfig ^. defaultBinPathBatchApp
+
+data ApplicationType = Main | Extra deriving (Eq)
+
+installApp :: MonadInstall m => InstallOpts -> ApplicationType -> ResolvedPackage -> m ()
+installApp opts applicationType package = do
     installConfig <- get @InstallConfig
     guiInstaller  <- Opts.guiInstallerOpt
     let pkgName    = package ^. header . name
         appType    = package ^. resolvedAppType
-    binPath     <- if guiInstaller then return $ toTextIgnore $
-        case appType of
-                GuiApp     -> installConfig ^. defaultBinPathGuiApp
-                BatchApp _ -> installConfig ^. defaultBinPathBatchApp
+    binPath     <- if guiInstaller then defBinPath appType
         else case currentHost of
             Darwin -> askLocation opts appType pkgName
-            _      -> if isMainApp then do
+            _      -> if applicationType == Main then do
                 path <- askLocation opts appType pkgName
                 modify_ @InstallConfig (defaultBinPathGuiApp   .~ fromText path)
                 modify_ @InstallConfig (defaultBinPathBatchApp .~ fromText path)
                 return path
-                else return $ toTextIgnore $
-                    case appType of
-                            GuiApp     -> installConfig ^. defaultBinPathGuiApp
-                            BatchApp _ -> installConfig ^. defaultBinPathBatchApp
+                    else defBinPath appType
     installApp' binPath package
 
 installApp' :: MonadInstall m => Text -> ResolvedPackage -> m ()
@@ -508,9 +511,8 @@ run opts = do
                 raise' e
             let appsToInstall = filter (( <$> (^. header . name)) (`elem` (repo ^.apps))) pkgsToInstall
                 resolvedApp   = ResolvedPackage (PackageHeader appName appVersion) appDesc (appPkg ^. appType)
-            installApp opts True resolvedApp
-            mapM_ (installApp opts False) appsToInstall
-            -- mapM_ (installApp opts) $ allApps
+            installApp opts Main resolvedApp
+            mapM_ (installApp opts Extra) appsToInstall
             print $ encode $ InstallationProgress 1
             liftIO $ hFlush stdout
             askToRunApp appName (showPretty appVersion) (appPkg ^. appType)
@@ -546,7 +548,7 @@ run opts = do
             let appsToInstall = filter (( <$> (^. header . name)) (`elem` (repo ^.apps))) pkgsToInstall
 
                 resolvedApp = ResolvedPackage (PackageHeader appName version) appPkgDesc (appPkg ^. appType)
-            installApp opts True resolvedApp
-            mapM_ (installApp opts False) appsToInstall
+            installApp opts Main resolvedApp
+            mapM_ (installApp opts Extra) appsToInstall
 
             askToRunApp appName appVersion (appPkg ^. appType)
