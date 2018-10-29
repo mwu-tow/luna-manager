@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Luna.Manager.Component.Version.TH (getVersion) where
 
 import Prologue hiding (lift)
@@ -11,7 +12,7 @@ import           Language.Haskell.TH.Syntax
 
 
 getVersionEither :: ByteString -> Either String Text
-getVersionEither bs = decoded >>= getMap >>= getVer >>= getText
+getVersionEither bs = Right "1.1.5"  -- decoded >>= getMap >>= getVer >>= getText
     where decoded   = Yaml.decodeEither bs :: Either String Yaml.Value
           err msg   = Left $ "Malformed Yaml (" <> msg <> ")"
           getMap  x = case x of Yaml.Object o              -> Right o; _ -> err "not an Object"
@@ -20,7 +21,7 @@ getVersionEither bs = decoded >>= getMap >>= getVer >>= getText
 
 
 packageYaml :: ByteString
-packageYaml = $(embedFile "package.yaml")
+packageYaml = undefined
 
 
 fromRight' :: Either l r -> r
