@@ -4,7 +4,7 @@ module Luna.Manager.Archive where
 
 import           Prologue hiding (FilePath, (<.>))
 
-import           Luna.Manager.Shell.Shelly (MonadSh, runProcess)
+import           Luna.Manager.Shell.Shelly (MonadSh, runProcessWithRetry)
 import           Control.Concurrent        (threadDelay)
 import           Control.Monad.Raise
 import           Control.Monad.State.Layered
@@ -196,10 +196,11 @@ unSevenZzipWin totalProgress progressFieldName zipFile = do
     script       <- download7Zip
     let dir      =  directory zipFile
         name     =  dir </> basename zipFile
-
-    runProcess script [ "x", "-o" <> Shelly.toTextIgnore name
-                      , "-y", Shelly.toTextIgnore zipFile
-                      ]
+        delay    =  30000000
+   
+    runProcessWithRetry delay script [ "x", "-o" <> Shelly.toTextIgnore name
+                                     , "-y", Shelly.toTextIgnore zipFile
+                                     ]
     return name
 
 pack :: UnpackContext m => FilePath -> Text -> m FilePath

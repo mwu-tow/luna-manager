@@ -3,6 +3,7 @@ module Luna.Manager.Shell.Shelly (module Luna.Manager.Shell.Shelly, module X) wh
 
 import Prologue hiding (FilePath)
 
+import           Control.Concurrent           (threadDelay)
 import qualified Control.Exception.Safe       as Exception
 import           Control.Monad.Raise          (MonadException, raise)
 import           Control.Monad.State.Layered  as State
@@ -19,7 +20,7 @@ import qualified Luna.Manager.System.Env      as System
 
 import           Filesystem.Path.CurrentOS    (FilePath, (</>), encodeString, decodeString, toText, parent)
 import           System.IO                    (stdout, stderr, withFile, IOMode(AppendMode), Handle)
-import           System.Process.Typed         as Process
+import qualified System.Process.Typed         as Process
 import           System.Exit
 
 deriving instance MonadSh   m => MonadSh (StateT s m)
@@ -50,7 +51,18 @@ runCommand :: (MonadIO m) => String -> FilePath -> m ()
 runCommand cmd path = liftIO $ Process.runProcess_ $ Process.shell $ cmd <> quotedPath
     where quotedPath = "\"" <> encodeString path <> "\""
 
-runProcess :: (Logger.LoggerMonad m, MonadIO m) => FilePath -> [Text] -> m ()
+runProcessWithRetry :: (Logger.LoggerMonad m, MonadIO m)
+                    => Int -> FilePath -> [Text] -> m ExitCode
+runProcessWithRetry delay path args = do
+    ec <- runProcess path args
+    case ec of
+        ExitSuccess   -> return ExitSuccess
+        ExitFailure _ -> do
+            liftIO $ threadDelay delay
+            runProcess path args
+
+runProcess :: (Logger.LoggerMonad m, MonadIO m)
+           => FilePath -> [Text] -> m ExitCode
 runProcess path args = do
     opts <- view globals <$> State.get @Options
     let verb   = opts ^. verbose
@@ -59,14 +71,16 @@ runProcess path args = do
         then runProcessStdout path args
         else runProcessFile   path args
 
-runProcessStdout :: (Logger.LoggerMonad m, MonadIO m) => FilePath -> [Text] -> m ()
-runProcessStdout path args = runProcess_ $ _createProcess path args stdout stderr
+runProcessStdout :: (Logger.LoggerMonad m, MonadIO m)
+                 => FilePath -> [Text] -> m ExitCode
+runProcessStdout path args = Process.runProcess $ _createProcess path args stdout stderr
 
-runProcessFile :: (Logger.LoggerMonad m, MonadIO m) => FilePath -> [Text] -> m ()
+runProcessFile :: (Logger.LoggerMonad m, MonadIO m)
+               => FilePath -> [Text] -> m ExitCode
 runProcessFile path args = do
     file <- Logger.logFilePath
     liftIO $ withFile (pathToStr path) AppendMode $ \fp ->
-        runProcess_ $ _createProcess path args fp fp
+        Process.runProcess $ _createProcess path args fp fp
 
 _createProcess :: FilePath -> [Text] -> Handle -> Handle
                -> Process.ProcessConfig () () ()
@@ -75,7 +89,7 @@ _createProcess path args hOut hErr =
     in Process.setStdin  Process.closed
      $ Process.setStdout (Process.useHandleOpen hOut)
      $ Process.setStderr (Process.useHandleOpen hErr)
-     $ proc (pathToStr path) args'
+     $ Process.proc      (pathToStr path) args'
 
 rm_rf :: (Logger.LoggerMonad m, MonadIO m, MonadSh m, MonadCatch m) => FilePath -> m ()
 rm_rf path = case currentHost of
