@@ -27,10 +27,13 @@ import System.Exit
 import qualified Control.Exception.Safe            as Exception
 import qualified Crypto.Hash                       as Crypto
 import qualified Data.ByteString.Lazy.Char8        as BSLChar
+import qualified Filesystem.Path.CurrentOS         as FP
 import qualified Data.Text                         as Text
+import qualified Data.Text.IO                      as Text
 import qualified Luna.Manager.Archive              as Archive
 import qualified Luna.Manager.Command.Options      as Opts
 import qualified Luna.Manager.Component.Repository as Repository
+import qualified Luna.Manager.Legal                as Legal
 import qualified Luna.Manager.Logger               as Logger
 import qualified Luna.Manager.Shell.Shelly         as Shelly
 import qualified Safe
@@ -306,10 +309,95 @@ downloadExternalPkgs cfgFolderPath resolvedApp opts = do
         Shelly.cp_r folder tgtPath
         return $ tgtPath </> filename folder
 
+updateExeInfo :: MonadCreatePackage m
+    => Version -> FilePath -> m ()
+updateExeInfo version exePath = do
+    let exeName    = filename exePath
+        rcCompiler = "C:\\Program Files\\Microsoft SDKs\\Windows\\v7.0\\rc.exe"
+        resHacker  =
+            "C:\\Program Files (x86)\\Resource Hacker\\ResourceHacker.exe"
+        resPath    = FP.replaceExtension exePath "res"
+        rcPath     = FP.replaceExtension exePath "rc"
+    liftIO $ Text.writeFile (encodeString rcPath) $
+        createExeVersionManifest version (convert $ encodeString exeName)
+    runProcess rcCompiler [Shelly.toTextIgnore rcPath]
+    runProcess resHacker  [ "-open", Shelly.toTextIgnore exePath
+                          , "-save", Shelly.toTextIgnore exePath
+                          , "-action addoverwrite"
+                          , Shelly.toTextIgnore resPath]
+    Shelly.rm_rf resPath
+
+createExeVersionManifest :: Version -> Text -> Text
+createExeVersionManifest version exeName =
+    let versionFormat    = showPretty version
+        winVersionFormat = Text.replace "." "," versionFormat
+    in Text.unlines [
+        "VS_VERSION_INFO VERSIONINFO"
+      , Text.concat ["    FILEVERSION    ", winVersionFormat]
+      , Text.concat ["    PRODUCTVERSION ", winVersionFormat]
+      , "{"
+      , "    BLOCK \"StringFileInfo\""
+      , "    {"
+      , "        BLOCK \"040904b0\""
+      , "        {"
+      , Text.concat [
+            "            VALUE \"CompanyName\",        \""
+          , Legal.companyName
+          , "\\0\""
+          ]
+      , Text.concat [
+            "            VALUE \"FileDescription\",    \""
+          , Legal.productDescription
+          , "\\0\""
+          ]
+      , Text.concat [
+            "            VALUE \"FileVersion\",        \""
+          , versionFormat
+          , "\\0\""
+          ]
+      , Text.concat [
+            "            VALUE \"LegalCopyright\",     \""
+          , Legal.copyright
+          , "\\0\""
+          ]
+      , Text.concat [
+            "            VALUE \"OriginalFilename\",   \""
+          , exeName
+          , "\\0\""
+          ]
+      , Text.concat [
+            "            VALUE \"ProductName\",        \""
+          , Legal.productName
+          , "\\0\""
+          ]
+      , Text.concat [
+            "            VALUE \"ProductVersion\",     \""
+          , versionFormat
+          , "\\0\""
+          ]
+      , "        }"
+      , "    }"
+      , "    BLOCK \"VarFileInfo\""
+      , "    {"
+      , "        VALUE \"Translation\", 0x409, 1200"
+      , "    }"
+      , "}"
+        ]
+
+
+updateWindowsMetadata :: MonadCreatePackage m
+    => Version -> FilePath -> FilePath -> m ()
+updateWindowsMetadata version privateBinFolder mainBin = do
+    updateExeInfo version mainBin
+    binaries <- liftIO . listDirectory $ encodeString privateBinFolder
+    forM_ binaries $ \b -> do
+        let fullPath = privateBinFolder </> decodeString b
+        updateExeInfo version fullPath
+
 signWindowsBinary :: MonadCreatePackage m => Text -> m ()
 signWindowsBinary binPath = do
-    let signTool     =  "c:\\Program Files (x86)\\Windows Kits\\10\\bin\\x64\\signtool.exe"
-        timestampUrl = "http://timestamp.comodoca.com/authenticode"
+    let signTool     = "c:\\Program Files (x86)\\Windows Kits\\10\\bin\\x64\\signtool.exe"
+        timestampUrl = "http://timestamp.digicert.com"
     certPath <- liftIO $ convert <$> getEnv "CERT_PATH"
     certPass <- liftIO $ convert <$> getEnv "CERT_PASS"
     runProcess signTool [ "sign", "/v", "/f", certPath, "/p", certPass
@@ -437,6 +525,7 @@ createPkg cfgFolderPath s3GuiURL resolvedApplication = do
         let appName' = convert appName
             binary   = publicBinsFolder </> appName' </> appName' <.> "exe"
         signWindowsBinaries privateBinsFolder binary
+        updateWindowsMetadata appVersion privateBinsFolder binary
 
     when (currentHost == Darwin) $
         Shelly.silently $ linkLibs privateBinsFolder libsFolder
