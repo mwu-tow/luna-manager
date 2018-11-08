@@ -15,7 +15,7 @@ import Luna.Manager.Command.Options   (MakePackageOpts, Options,
 import Luna.Manager.Component.Pretty
 import Luna.Manager.Component.Version (Version, readVersion)
 import Luna.Manager.Network
-import Luna.Manager.Shell.Shelly      (MonadSh, runProcess)
+import Luna.Manager.Shell.Shelly      (MonadSh, runProcess, runRawSystem)
 import Luna.Manager.System            (generateChecksum, makeExecutable)
 import Luna.Manager.System.Env
 import Luna.Manager.System.Host
@@ -313,18 +313,24 @@ updateExeInfo :: MonadCreatePackage m
     => Version -> FilePath -> m ()
 updateExeInfo version exePath = do
     let exeName    = filename exePath
-        rcCompiler = "C:\\Program Files\\Microsoft SDKs\\Windows\\v7.0\\rc.exe"
         resHacker  =
             "C:\\Program Files (x86)\\Resource Hacker\\ResourceHacker.exe"
         resPath    = FP.replaceExtension exePath "res"
         rcPath     = FP.replaceExtension exePath "rc"
     liftIO $ Text.writeFile (encodeString rcPath) $
         createExeVersionManifest version (convert $ encodeString exeName)
-    runProcess rcCompiler [Shelly.toTextIgnore rcPath]
-    runProcess resHacker  [ "-open", Shelly.toTextIgnore exePath
-                          , "-save", Shelly.toTextIgnore exePath
-                          , "-action addoverwrite"
-                          , Shelly.toTextIgnore resPath]
+    runRawSystem resHacker [ "-open", Shelly.toTextIgnore rcPath
+                           , "-save", Shelly.toTextIgnore resPath
+                           , "-action", "compile"
+                           , "-log", "CONSOLE"
+                           ]
+    runRawSystem resHacker [ "-open", Shelly.toTextIgnore exePath
+                           , "-save", Shelly.toTextIgnore exePath
+                           , "-action", "addoverwrite"
+                           , "-resource", Shelly.toTextIgnore resPath
+                           , "-log", "CONSOLE"
+                           ]
+    Shelly.rm_rf rcPath
     Shelly.rm_rf resPath
 
 createExeVersionManifest :: Version -> Text -> Text
@@ -343,37 +349,37 @@ createExeVersionManifest version exeName =
       , Text.concat [
             "            VALUE \"CompanyName\",        \""
           , Legal.companyName
-          , "\\0\""
+          , "\""
           ]
       , Text.concat [
             "            VALUE \"FileDescription\",    \""
           , Legal.productDescription
-          , "\\0\""
+          , "\""
           ]
       , Text.concat [
             "            VALUE \"FileVersion\",        \""
           , versionFormat
-          , "\\0\""
+          , "\""
           ]
       , Text.concat [
             "            VALUE \"LegalCopyright\",     \""
           , Legal.copyright
-          , "\\0\""
+          , "\""
           ]
       , Text.concat [
             "            VALUE \"OriginalFilename\",   \""
           , exeName
-          , "\\0\""
+          , "\""
           ]
       , Text.concat [
             "            VALUE \"ProductName\",        \""
           , Legal.productName
-          , "\\0\""
+          , "\""
           ]
       , Text.concat [
             "            VALUE \"ProductVersion\",     \""
           , versionFormat
-          , "\\0\""
+          , "\""
           ]
       , "        }"
       , "    }"
@@ -524,8 +530,8 @@ createPkg cfgFolderPath s3GuiURL resolvedApplication = do
     when (currentHost == Windows) $ do
         let appName' = convert appName
             binary   = publicBinsFolder </> appName' </> appName' <.> "exe"
-        signWindowsBinaries privateBinsFolder binary
         updateWindowsMetadata appVersion privateBinsFolder binary
+        signWindowsBinaries privateBinsFolder binary
 
     when (currentHost == Darwin) $
         Shelly.silently $ linkLibs privateBinsFolder libsFolder
