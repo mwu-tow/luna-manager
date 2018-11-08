@@ -48,21 +48,21 @@ runCommand cmd path = liftIO $ TypedProcess.runProcess_
                              $ TypedProcess.shell $ cmd <> quotedPath
     where quotedPath = "\"" <> encodeString path <> "\""
 
-runProcess :: (MonadIO m) => FilePath -> [Text] -> m ()
+runProcess :: (Logger.LoggerMonad m, MonadIO m) => FilePath -> [Text] -> m ()
 runProcess path args = do
     let pathStr = encodeString path
         argsStr = map convert args
     (ec, out, err) <- liftIO $ Process.readProcessWithExitCode pathStr argsStr ""
-    putStrLn $ show ec
-    putStrLn $ out
-    putStrLn $ err
+    Logger.log $ convert $ show ec
+    Logger.log $ convert out
+    Logger.log $ convert err
 
-runRawSystem :: MonadIO m => FilePath -> [Text] -> m ()
+runRawSystem :: (Logger.LoggerMonad m, MonadIO m) => FilePath -> [Text] -> m ()
 runRawSystem path args = do
     let pathStr = encodeString path
         argsStr = map convert args
     ec <- liftIO $ Process.system $ "\"" <> pathStr <> "\"" <> " " <> unwords argsStr
-    putStrLn $ show ec
+    Logger.log $ convert $ show ec
 
 rm_rf :: (Logger.LoggerMonad m, MonadIO m, MonadSh m, MonadCatch m) => FilePath -> m ()
 rm_rf path = case currentHost of
@@ -74,7 +74,7 @@ rm_rf path = case currentHost of
                 Prologue.when exists $ do
                     runCommand "rmdir /s /q " path
                     let oneSecond = 1 * 1000000
-                    threadDelay oneSecond
+                    liftIO $ threadDelay oneSecond
                     removeRepeatedly
         removeRepeatedly
         Prologue.whenM (Sh.test_e path) $ runCommand "rm " path
