@@ -190,13 +190,19 @@ unSevenZzipWin totalProgress progressFieldName zipFile = do
     let dir      =  directory zipFile
         name     =  dir </> basename zipFile
 
-    runProcess script [ "x", "-o" <> Shelly.toTextIgnore name
-                      , "-y", Shelly.toTextIgnore zipFile
+    runProcess script [ "x", "-y", Shelly.toTextIgnore zipFile
                       ]
 
-    when (extension zipFile == Just "gz") $
+    when (extension zipFile == Just "gz") $ do
+        -- backwards compatibility with lsw-MAJOR.MINOR.tar.gz
+        let tarFile =
+                if "lsw" `Text.isPrefixOf` Shelly.toTextIgnore (basename zipFile)
+                then  Text.replace "lsw" "luna-studio-windows"
+                    $ Shelly.toTextIgnore
+                    $ FP.dropExtension zipFile
+                else Shelly.toTextIgnore $ FP.dropExtension zipFile
         runProcess script [ "x", "-o" <> Shelly.toTextIgnore name
-                          , "-y", Shelly.toTextIgnore (FP.dropExtension zipFile)
+                          , "-y", tarFile
                           ]
 
     return name
