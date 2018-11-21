@@ -190,7 +190,8 @@ unSevenZzipWin totalProgress progressFieldName zipFile = do
     let dir      =  directory zipFile
         name     =  dir </> basename zipFile
 
-    runProcess script [ "x", "-y", Shelly.toTextIgnore zipFile
+    runProcess script [ "x", "-o", Shelly.toTextIgnore dir
+                      , "-y", Shelly.toTextIgnore zipFile
                       ]
 
     when (extension zipFile == Just "gz") $ do
