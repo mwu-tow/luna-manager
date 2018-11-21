@@ -190,7 +190,7 @@ unSevenZzipWin totalProgress progressFieldName zipFile = do
     let dir      =  directory zipFile
         name     =  dir </> basename zipFile
 
-    runProcess script [ "x", "-o", Shelly.toTextIgnore dir
+    runProcess script [ "x", "-o" <> Shelly.toTextIgnore dir
                       , "-y", Shelly.toTextIgnore zipFile
                       ]
 
