@@ -193,6 +193,12 @@ unSevenZzipWin totalProgress progressFieldName zipFile = do
     runProcess script [ "x", "-o" <> Shelly.toTextIgnore name
                       , "-y", Shelly.toTextIgnore zipFile
                       ]
+
+    when (extension zipFile == Just "gz") $
+        runProcess script [ "x", "-o" <> Shelly.toTextIgnore name
+                          , "-y", Shelly.toTextIgnore (FP.dropExtension zipFile)
+                          ]
+
     return name
 
 pack :: UnpackContext m => FilePath -> Text -> m FilePath

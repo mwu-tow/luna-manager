@@ -321,11 +321,16 @@ copyWinSW installPath = when (currentHost == Windows) $ do
 registerUninstallInfo :: MonadInstall m => FilePath -> m ()
 registerUninstallInfo installPath = when (currentHost == Windows) $ do
     installConfig <- get @InstallConfig
-    let registerScript = installPath </> (installConfig ^. configPath) </> fromText "windows" </> "registerUninstall.ps1"
+    let registerScript = installPath
+                    </> (installConfig ^. configPath)
+                    </> fromText "windows"
+                    </> "registerUninstall.ps1"
         directory      = parent $ parent installPath -- if default, c:\Program Files\
     pkgHasRegister <- Shelly.test_f registerScript
     when pkgHasRegister $ do
-        let registerPowershell = "powershell -inputformat none -executionpolicy bypass -file \"" <> toTextIgnore registerScript <> "\" \"" <> toTextIgnore directory <> "\""
+        let registerPowershell = "powershell -inputformat none -executionpolicy bypass -file \""
+                <> toTextIgnore registerScript
+                <> "\" \"" <> toTextIgnore directory <> "\""
         Logger.logProcess registerPowershell
 
 moveUninstallScript :: MonadInstall m => FilePath -> m ()
