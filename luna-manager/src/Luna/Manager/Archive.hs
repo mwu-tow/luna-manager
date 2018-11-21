@@ -207,7 +207,8 @@ unSevenZzipWin totalProgress progressFieldName zipFile = do
                           ]
         return $ dir
             </> Shelly.fromText
-                (Text.replace "lsw" "luna-studio-windows" (basename zipFile))
+                (Text.replace "lsw" "luna-studio-windows"
+                    (Shelly.toTextIgnore $ basename zipFile))
     else do
         return name
 
