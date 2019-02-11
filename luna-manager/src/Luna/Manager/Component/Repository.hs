@@ -13,11 +13,13 @@ import           Luna.Manager.System.Host
 import           Luna.Manager.System.Path
 
 import           Control.Lens.Aeson
+import qualified Control.Lens.Aeson          as LensJSON
 import           Control.Monad.Raise
-import           Control.Monad.State.Layered
+import qualified Control.Monad.State.Layered as State
 import           Data.Aeson                  (FromJSON, ToJSON, parseJSON)
 import qualified Data.Aeson                  as JSON
 import qualified Data.ByteString             as BS
+import           Data.List                   (sort)
 import           Data.Map                    (Map)
 import qualified Data.Map                    as Map
 import qualified Data.Text                   as Text
@@ -134,7 +136,7 @@ resolvePackageApp repo appName = do
     appPkg       <- Logger.tryJustWithLog "Repo.resolvePackageApp" undefinedPackageError $ Map.lookup appName (repo ^. packages)
     versionsList <- getVersionsList repo appName
     Logger.logObject "[resolvePackageApp] versionsList" versionsList
-    let version         = head versionsList
+    let version         = unsafeHead versionsList -- FIXME
         applicationType = appPkg ^. appType
     Logger.logObject "[resolvePackageApp] version" version
     desc <- Logger.tryJustWithLog "Repo.resolvePackageApp" (toException UnresolvedDepError) $ Map.lookup version $ appPkg ^. versions
@@ -190,15 +192,15 @@ generateConfigYamlWithNewPackage repo packageYaml = saveYamlToFile $ repoUnion r
 -- === Instances === --
 
 -- JSON
-instance ToJSON   AppType        where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
-instance ToJSON   Repo           where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
-instance ToJSON   Package        where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
-instance ToJSON   PackageDesc    where toEncoding = lensJSONToEncoding; toJSON = lensJSONToJSON
+instance ToJSON   AppType        where toEncoding = LensJSON.toEncodingDropUnary; toJSON = LensJSON.toJSONDropUnary
+instance ToJSON   Repo           where toEncoding = LensJSON.toEncodingDropUnary; toJSON = LensJSON.toJSONDropUnary
+instance ToJSON   Package        where toEncoding = LensJSON.toEncodingDropUnary; toJSON = LensJSON.toJSONDropUnary
+instance ToJSON   PackageDesc    where toEncoding = LensJSON.toEncodingDropUnary; toJSON = LensJSON.toJSONDropUnary
 instance ToJSON   PackageHeader  where toEncoding = JSON.toEncoding . showPretty; toJSON = JSON.toJSON . showPretty
-instance FromJSON AppType        where parseJSON  = lensJSONParse
-instance FromJSON Repo           where parseJSON  = lensJSONParse
-instance FromJSON Package        where parseJSON  = lensJSONParse
-instance FromJSON PackageDesc    where parseJSON  = lensJSONParse
+instance FromJSON AppType        where parseJSON  = LensJSON.parseDropUnary
+instance FromJSON Repo           where parseJSON  = LensJSON.parseDropUnary
+instance FromJSON Package        where parseJSON  = LensJSON.parseDropUnary
+instance FromJSON PackageDesc    where parseJSON  = LensJSON.parseDropUnary
 instance FromJSON PackageHeader  where parseJSON  = either (fail . convert) return . readPretty <=< parseJSON
 
 -- Show
@@ -223,7 +225,7 @@ makeLenses ''RepoConfig
 
 -- === Utils === --
 
-type MonadRepo m = (MonadGetter Options m, MonadStates '[RepoConfig, EnvConfig] m, MonadNetwork m)
+type MonadRepo m = (State.Getter Options m, State.Monad RepoConfig m, State.Monad EnvConfig m, MonadNetwork m)
 
 parseConfig :: (MonadIO m, MonadException SomeException m) => FilePath -> m Repo
 parseConfig cfgPath =  tryRight' =<< liftIO (Yaml.decodeFileEither $ encodeString cfgPath)
@@ -232,7 +234,7 @@ downloadRepo :: MonadNetwork m => URIPath -> m FilePath
 downloadRepo address = downloadFromURL address "Downloading repository configuration file"
 
 getRepo :: MonadRepo m => m Repo
-getRepo = gets @RepoConfig repoPath >>= downloadRepo >>= parseConfig
+getRepo = State.gets @RepoConfig (view repoPath) >>= downloadRepo >>= parseConfig
 
 updateConfig :: Repo -> ResolvedApplication -> Repo
 updateConfig config resolvedApplication =

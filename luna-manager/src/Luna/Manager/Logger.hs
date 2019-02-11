@@ -2,22 +2,23 @@
 
 module Luna.Manager.Logger where
 
-import           Control.Monad.Raise
-import           Control.Monad.State.Layered
-import           Data.Text                   (Text, pack, unpack)
+import qualified Control.Monad.State.Layered as State
 import qualified Data.Text.IO                as Text
-import           Filesystem.Path.CurrentOS   (FilePath, decodeString, (</>))
-import           Prologue                    hiding (FilePath, log)
-import           Shelly.Lifted               (MonadSh, MonadShControl)
 import qualified Shelly.Lifted               as Sh
-import           System.Directory            (getAppUserDataDirectory)
-import           System.IO                   (hFlush, stdout)
 import qualified System.Process.Typed        as Process
 
-import Data.Aeson (FromJSON, ToJSON, encode)
+import Data.Aeson                (FromJSON, ToJSON, encode)
+import Data.Text                 (Text, pack, unpack)
+import Filesystem.Path.CurrentOS (FilePath, decodeString, (</>))
+import Luna.Manager.System.Env   (EnvConfig)
+import Prologue                  hiding (FilePath, log)
+import Shelly.Lifted             (MonadSh, MonadShControl)
+import System.Directory          (getAppUserDataDirectory)
+import System.IO                 (hFlush, stdout)
 
+import Control.Monad.Raise
 import Luna.Manager.Command.Options
-import Luna.Manager.System.Env      (EnvConfig)
+
 
 
 data WarningMessage = WarningMessage { message :: Text
@@ -26,7 +27,7 @@ data WarningMessage = WarningMessage { message :: Text
 instance ToJSON   WarningMessage
 instance FromJSON WarningMessage
 
-type LoggerMonad m = (MonadIO m, MonadSh m, MonadShControl m, MonadGetters '[Options, EnvConfig] m)
+type LoggerMonad m = (MonadIO m, MonadSh m, MonadShControl m, State.Getters '[Options, EnvConfig] m)
 
 
 logFilePath :: LoggerMonad m => m FilePath
@@ -50,7 +51,7 @@ logToTmpFile msg = do
 
 info :: LoggerMonad m => Text -> m ()
 info msg = do
-    opts <- view globals <$> get @Options
+    opts <- view globals <$> State.get @Options
     let gui  = opts ^. guiInstaller
         msg' = msg <> "\n"
     if gui then logToTmpFile msg' else liftIO $ logToStdout msg'
@@ -58,7 +59,7 @@ info msg = do
 log :: LoggerMonad m => Text -> m ()
 log msg = do
     -- TODO[piotrMocz] we need a more robust logging solution in the long run
-    opts <- view globals <$> get @Options
+    opts <- view globals <$> State.get @Options
     let verb = opts ^. verbose
         gui  = opts ^. guiInstaller
         msg' = msg <> "\n"
@@ -77,7 +78,7 @@ logToJSON = liftIO . print . encode . WarningMessage
 
 warning :: LoggerMonad m => Text -> m ()
 warning msg = do
-    opts <- view globals <$> get @Options
+    opts <- view globals <$> State.get @Options
     let verb = opts ^. verbose
         gui  = opts ^. guiInstaller
         m    = "WARNING: " <> msg

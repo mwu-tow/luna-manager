@@ -1,18 +1,19 @@
 module Luna.Manager.Network where
 
-import Prologue hiding (FilePath, fromText)
+import Prologue hiding (FilePath, fromText, tryJust)
 
-import qualified Control.Exception.Safe     as Exception
-import qualified Data.ByteString.Char8      as ByteStringChar (unpack)
-import qualified Data.ByteString.Lazy.Char8 as ByteStringL
-import qualified Luna.Manager.Logger        as Logger
-import qualified Network.HTTP.Conduit       as HTTP
-import qualified Network.URI                as URI
+import qualified Control.Exception.Safe      as Exception
+import qualified Control.Monad.State.Layered as State
+import qualified Data.ByteString.Char8       as ByteStringChar (unpack)
+import qualified Data.ByteString.Lazy.Char8  as ByteStringL
+import qualified Luna.Manager.Logger         as Logger
+import qualified Network.HTTP.Conduit        as HTTP
+import qualified Network.URI                 as URI
 
 import Control.Monad.Raise
-import Control.Monad.State.Layered
-import Control.Monad.Trans.Resource      (MonadBaseControl, runResourceT)
-import Data.Conduit                      (($$+-), ($=+))
+import Control.Monad.Trans.Resource      (runResourceT)
+import Data.Conduit                      (sealConduitT, unsealConduitT, ($$+-),
+                                          ($=+))
 import Data.Conduit.Binary               (sinkFile)
 import Filesystem.Path.CurrentOS
 import Luna.Manager.Command.Options      (Options, guiInstallerOpt)
@@ -43,9 +44,9 @@ downloadError = toException . DownloadError
 
 takeFileNameFromURL :: URIPath -> Maybe Text
 takeFileNameFromURL url = convert <$> name where
-    name = maybeLast . URI.pathSegments =<< URI.parseURI (convert url)
+    name = last . URI.pathSegments =<< URI.parseURI (convert url)
 
-type MonadNetwork m = (MonadIO m, MonadGetters '[Options, EnvConfig] m, MonadException SomeException m, MonadSh m, MonadShControl m, MonadCatch m, MonadThrow m,  MonadBaseControl IO m)
+type MonadNetwork m = (MonadIO m, State.Getters '[Options, EnvConfig] m, MonadException SomeException m, MonadSh m, MonadShControl m, MonadCatch m, MonadThrow m)
 
 fileExists :: MonadIO m => FilePath -> m Bool
 fileExists = liftIO . doesFileExist . encodeString
@@ -74,22 +75,23 @@ downloadWithProgressBar address = do
 
 downloadWithProgressBarTo :: MonadNetwork m => URIPath -> FilePath -> m FilePath
 downloadWithProgressBarTo address dstPath = Exception.handleAny (\e -> throwM (DownloadException address e)) $  do
-    guiInstaller <- guiInstallerOpt
-    req          <- HTTP.parseRequest (convert address)
-    manager      <- newHTTPManager
-    -- Start the request
-    runResourceT $ withJust (takeFileNameFromURL address) $ \name -> do
-        let dstFile = dstPath </> (fromText name)
-        res <- HTTP.http req manager
-        -- Get the Content-Length and initialize the progress bar
-        cl <- tryJust (downloadError address) $ lookup hContentLength (HTTP.responseHeaders res)
-        let pgTotal  = read (ByteStringChar.unpack cl)
-            pg       = ProgressBar 50 0 pgTotal
-            progress = Progress 0 pgTotal
-        -- Consume the response updating the progress bar
-        if guiInstaller then
-            HTTP.responseBody res $=+ updateProgress progress $$+- sinkFile (encodeString dstFile)
-        else do
-            HTTP.responseBody res $=+ updateProgressBar pg    $$+- sinkFile (encodeString dstFile)
-            putStrLn "Download completed!"
-        return dstFile
+    undefined
+    -- guiInstaller <- guiInstallerOpt
+    -- req          <- HTTP.parseRequest (convert address)
+    -- manager      <- newHTTPManager
+    -- -- Start the request
+    -- runResourceT $ withJust (takeFileNameFromURL address) $ \name -> do
+    --     let dstFile = dstPath </> (fromText name)
+    --     res <- HTTP.http req manager
+    --     -- Get the Content-Length and initialize the progress bar
+    --     cl <- tryJust (downloadError address) $ lookup hContentLength (HTTP.responseHeaders res)
+    --     let pgTotal  = unsafeRead (ByteStringChar.unpack cl) -- FIXME
+    --         pg       = ProgressBar 50 0 pgTotal
+    --         progress = Progress 0 pgTotal
+    --     -- Consume the response updating the progress bar
+    --     if guiInstaller then
+    --         undefined -- HTTP.responseBody res $=+ updateProgress progress $$+- sinkFile (encodeString dstFile)
+    --     else do
+    --         undefined -- HTTP.responseBody res $=+ updateProgressBar pg    $$+- sinkFile (encodeString dstFile)
+    --         putStrLn "Download completed!"
+    --     return dstFile

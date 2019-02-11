@@ -2,11 +2,11 @@
 {-# LANGUAGE OverloadedStrings    #-}
 module Luna.Manager.Archive where
 
-import Prologue hiding (FilePath, (<.>))
+import Prologue hiding (FilePath, tryJust, (<.>))
 
 import qualified Control.Exception.Safe         as Exception
 import           Control.Monad.Raise
-import           Control.Monad.State.Layered
+import qualified Control.Monad.State.Layered    as State
 import qualified Data.ByteString.Lazy           as BSL
 import qualified Data.ByteString.Lazy.Char8     as BSLChar
 import           Data.Either                    (either)
@@ -30,7 +30,7 @@ import           System.Exit
 import qualified System.Process.Typed           as Process
 default (Text.Text)
 
-type UnpackContext m = (MonadGetter Options m, MonadNetwork m, MonadSh m, Shelly.MonadShControl m, MonadIO m, MonadException SomeException m, MonadThrow m, MonadCatch m)
+type UnpackContext m = (State.Getter Options m, MonadNetwork m, MonadSh m, Shelly.MonadShControl m, MonadIO m, MonadException SomeException m, MonadThrow m, MonadCatch m)
 
 plainTextPath :: FilePath -> Text
 plainTextPath = either id id . FP.toText
@@ -90,7 +90,7 @@ unzipUnix file = do
             out <- Shelly.switchVerbosity $ Shelly.cmd  "unzip" $ dir </> name </> filename file
             Shelly.rm $ dir </> name </> filename file
             listed <- Shelly.ls $ dir </> name
-            if length listed == 1 then return $ head listed else return $ dir </> name
+            if length listed == 1 then return $ unsafeHead listed else return $ dir </> name -- FIXME
 
 countingFilesLogger :: Text.Text -> Double -> IORef Int -> Int -> Text.Text -> IO ()
 countingFilesLogger progressFieldName totalProgress lastNumber n t = do
@@ -136,7 +136,7 @@ unpackTarGzUnix totalProgress progressFieldName file mTargetName = do
                 Left err -> throwM (UnpackingException (Shelly.toTextIgnore file) (toException $ Exception.StringException err callStack ))
         else (Shelly.switchVerbosity $ Shelly.cmd  "tar" "-xpzf" file "--strip=1" "-C" name) `Exception.catchAny` (\err -> throwM (UnpackingException (Shelly.toTextIgnore file) $ toException err))
         listed <- Shelly.ls $ dir </> name
-        if length listed == 1 then return $ head listed else return $ dir </> name
+        if length listed == 1 then return $ unsafeHead listed else return $ dir </> name -- FIXME
 
 -- TODO: download unzipper if missing
 unzipFileWindows :: UnpackContext m => FilePath -> m FilePath
@@ -155,7 +155,7 @@ unzipFileWindows zipFile = do
           Shelly.rm $ dir </> name </> filename zipFile
           Shelly.rm $ dir </> name </> filename script
           listed <- Shelly.ls $ dir </> name
-          return $ if length listed == 1 then head listed else dir </> name
+          return $ if length listed == 1 then unsafeHead listed else dir </> name -- FIXME
 
 untarWin :: UnpackContext m => Double -> Text.Text -> FilePath -> m FilePath
 untarWin totalProgress progressFieldName zipFile = do
@@ -173,7 +173,7 @@ untarWin totalProgress progressFieldName zipFile = do
             then Shelly.log_stdout_with (directProgressLogger progressFieldName totalProgress) $ Shelly.cmd (dir </> filename script) "untar" (filename zipFile) name
             else Shelly.log_stdout_with progressBarLogger $ Shelly.cmd (dir </> filename script) "untar" (filename zipFile) name `Exception.catchAny` (\err -> throwM (UnpackingException (Shelly.toTextIgnore zipFile) $ toException err))
         listed <- Shelly.ls $ dir </> name
-        return $ if length listed == 1 then head listed else dir </> name
+        return $ if length listed == 1 then unsafeHead listed else dir </> name -- FIXME
 
 download7Zip :: UnpackContext m => m FilePath
 download7Zip = do
