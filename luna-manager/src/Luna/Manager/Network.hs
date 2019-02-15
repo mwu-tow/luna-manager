@@ -12,8 +12,7 @@ import qualified Network.URI                 as URI
 
 import Control.Monad.Raise
 import Control.Monad.Trans.Resource      (runResourceT)
-import Data.Conduit                      (sealConduitT, unsealConduitT, ($$+-),
-                                          ($=+))
+import Data.Conduit                      (runConduit, (.|))
 import Data.Conduit.Binary               (sinkFile)
 import Filesystem.Path.CurrentOS
 import Luna.Manager.Command.Options      (Options, guiInstallerOpt)
@@ -75,23 +74,26 @@ downloadWithProgressBar address = do
 
 downloadWithProgressBarTo :: MonadNetwork m => URIPath -> FilePath -> m FilePath
 downloadWithProgressBarTo address dstPath = Exception.handleAny (\e -> throwM (DownloadException address e)) $  do
-    undefined
-    -- guiInstaller <- guiInstallerOpt
-    -- req          <- HTTP.parseRequest (convert address)
-    -- manager      <- newHTTPManager
-    -- -- Start the request
-    -- runResourceT $ withJust (takeFileNameFromURL address) $ \name -> do
-    --     let dstFile = dstPath </> (fromText name)
-    --     res <- HTTP.http req manager
-    --     -- Get the Content-Length and initialize the progress bar
-    --     cl <- tryJust (downloadError address) $ lookup hContentLength (HTTP.responseHeaders res)
-    --     let pgTotal  = unsafeRead (ByteStringChar.unpack cl) -- FIXME
-    --         pg       = ProgressBar 50 0 pgTotal
-    --         progress = Progress 0 pgTotal
-    --     -- Consume the response updating the progress bar
-    --     if guiInstaller then
-    --         undefined -- HTTP.responseBody res $=+ updateProgress progress $$+- sinkFile (encodeString dstFile)
-    --     else do
-    --         undefined -- HTTP.responseBody res $=+ updateProgressBar pg    $$+- sinkFile (encodeString dstFile)
-    --         putStrLn "Download completed!"
-    --     return dstFile
+    guiInstaller <- guiInstallerOpt
+    req          <- HTTP.parseRequest (convert address)
+    manager      <- newHTTPManager
+    
+    name <- tryJust (downloadError address) (takeFileNameFromURL address)
+    let dstFile = dstPath </> (fromText name)
+    liftIO $ runResourceT $ do
+        -- Start the request
+        res <- HTTP.http req manager
+        -- Get the Content-Length and initialize the progress bar
+        cl <- tryJust (downloadError address) $ lookup hContentLength (HTTP.responseHeaders res)
+        let pgTotal  = unsafeRead (ByteStringChar.unpack cl) -- FIXME
+            pg       = ProgressBar 50 0 pgTotal
+            progress = Progress 0 pgTotal
+
+        -- Consume the response updating the progress bar
+        runConduit $ do
+            if guiInstaller then
+                HTTP.responseBody res .| updateProgress progress .| sinkFile (encodeString dstFile)
+            else do
+                HTTP.responseBody res .| updateProgressBar pg    .| sinkFile (encodeString dstFile)
+                putStrLn "Download completed!"
+    return dstFile
