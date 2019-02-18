@@ -19,5 +19,5 @@ steps:
     wget -qO- https://get.haskellstack.org/ | sh
     stack build
     stack run develop luna-studio
-    stack run develop make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
+    stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
   displayName: 'Run a multi-line script'
