@@ -7,9 +7,7 @@
 
 module Luna.Manager.Component.Analytics (
     MPUserData(..),
-    mpRegisterUser,
     tryMpRegisterUser,
-    mpTrackEvent,
     tryMpTrackEvent,
     userInfoExists
 ) where
@@ -277,8 +275,8 @@ tryMpRegisterUser :: (LoggerMonad m, MonadIO m, MonadSetter MPUserData m, MonadT
                     MonadShControl m, MonadSh m, MonadBaseControl IO m, MonadCatch m) =>
                     FilePath -> Text -> m ()
 tryMpRegisterUser eventName = do 
-    let handler = \(e::SomeException) -> do
-            Logger.log $ convert $  "Caught exception: " <> displayException e
+    let handler = \e -> do
+            Logger.log $ convert $  "Encountered an exception when trying to register user in Mixpanel: " <> displayException e
     handleAny handler <$> mpRegisterUser eventName
 
 -- Send a single event to Mixpanel.
@@ -302,5 +300,5 @@ tryMpTrackEvent :: (LoggerMonad m, MonadIO m, MonadGetters '[MPUserData, Options
                 MonadThrow m, MonadSh m, MonadShControl m, MonadCatch m) => Text -> m ()
 tryMpTrackEvent eventName = do
     let handler = \(e::SomeException) -> do
-            Logger.log $ convert $  "Caught exception: " <> displayException e
+            Logger.log $ convert $  "Encountered an exception when trying to send an event to Mixpanel: " <> displayException e
     handleAny handler $ mpTrackEvent eventName
