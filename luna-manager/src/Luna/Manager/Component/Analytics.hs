@@ -7,8 +7,8 @@
 
 module Luna.Manager.Component.Analytics (
     MPUserData(..),
-    mpRegisterUser,
-    mpTrackEvent,
+    tryMpRegisterUser,
+    tryMpTrackEvent,
     userInfoExists
 ) where
 
@@ -271,6 +271,14 @@ mpRegisterUser userInfoPath email = Shelly.unlessM (userInfoExists userInfoPath)
     Logger.log "Done sending the request"
     return ()
 
+tryMpRegisterUser :: (LoggerMonad m, MonadIO m, MonadSetter MPUserData m, MonadThrow m,
+                    MonadShControl m, MonadSh m, MonadBaseControl IO m, MonadCatch m) =>
+                    FilePath -> Text -> m ()
+tryMpRegisterUser eventName = do 
+    let handler = \e -> do
+            Logger.log $ convert $  "Encountered an exception when trying to register user in Mixpanel: " <> displayException e
+    handleAny handler <$> mpRegisterUser eventName
+
 -- Send a single event to Mixpanel.
 mpTrackEvent :: (LoggerMonad m, MonadIO m, MonadGetters '[MPUserData, Options, EnvConfig] m,
                  MonadThrow m, MonadSh m, MonadShControl m) => Text -> m ()
@@ -286,3 +294,11 @@ mpTrackEvent eventName = do
     Logger.log "Sending MP request"
     sendMpRequest eventEndpoint mpData
     Logger.log "Done sending MP request"
+
+
+tryMpTrackEvent :: (LoggerMonad m, MonadIO m, MonadGetters '[MPUserData, Options, EnvConfig] m,
+                MonadThrow m, MonadSh m, MonadShControl m, MonadCatch m) => Text -> m ()
+tryMpTrackEvent eventName = do
+    let handler = \(e::SomeException) -> do
+            Logger.log $ convert $  "Encountered an exception when trying to send an event to Mixpanel: " <> displayException e
+    handleAny handler $ mpTrackEvent eventName
