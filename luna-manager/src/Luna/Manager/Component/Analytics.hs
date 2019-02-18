@@ -234,21 +234,25 @@ projectToken :: Text
 projectToken = "0d906436719b047c86b7fee8ae550601"
 
 eventEndpoint :: String
-eventEndpoint = "http://api.mixpanel.com/track/"
+eventEndpoint = "http://api.mixpanel.cm/track/"
 
 userUpdateEndpoint :: String
-userUpdateEndpoint = "http://api.mixpanel.com/engage/"
+userUpdateEndpoint = "http://api.mixpanel.cm/engage/"
 
 serialize :: ToJSON s => s -> ByteString
 serialize = Base64.encode . toStrict . JSON.encode
 
 -- Generic wrapper around Mixpanel requests.
-sendMpRequest :: (LoggerMonad m, ToJSON s, MonadIO m, MonadThrow m) => String -> s -> m ()
+sendMpRequest :: (LoggerMonad m, ToJSON s, MonadIO m, MonadThrow m, MonadCatch m) => String -> s -> m ()
 sendMpRequest endpoint s = do
+    let handler = \(e::SomeException) -> do
+            Logger.log $ convert $  "Caught exception: " <> displayException e
+            return HTTP.defaultRequest
     Logger.log "Analytics.sendMpRequest"
     let payload = serialize s
-    request <- HTTP.setRequestQueryString [("data", Just payload)] <$>
-               HTTP.parseRequest endpoint
+    request <- handleAny handler $ do  
+        HTTP.setRequestQueryString [("data", Just payload)] <$> 
+            HTTP.parseRequest endpoint
     liftIO $ void $ HTTP.httpNoBody request
 
 -- Register a new user within Mixpanel.
@@ -273,7 +277,7 @@ mpRegisterUser userInfoPath email = Shelly.unlessM (userInfoExists userInfoPath)
 
 -- Send a single event to Mixpanel.
 mpTrackEvent :: (LoggerMonad m, MonadIO m, MonadGetters '[MPUserData, Options, EnvConfig] m,
-                 MonadThrow m, MonadSh m, MonadShControl m) => Text -> m ()
+                 MonadThrow m, MonadSh m, MonadShControl m, MonadCatch m) => Text -> m ()
 mpTrackEvent eventName = do
     Logger.log "Analytics.mpTrackEvent"
     uuid <- gets @MPUserData userInfoUUID
