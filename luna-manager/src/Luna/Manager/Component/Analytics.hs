@@ -234,10 +234,10 @@ projectToken :: Text
 projectToken = "0d906436719b047c86b7fee8ae550601"
 
 eventEndpoint :: String
-eventEndpoint = "http://api.mixpanel.cm/track/"
+eventEndpoint = "http://api.mixpanel.com/track/"
 
 userUpdateEndpoint :: String
-userUpdateEndpoint = "http://api.mixpanel.cm/engage/"
+userUpdateEndpoint = "http://api.mixpanel.com/engage/"
 
 serialize :: ToJSON s => s -> ByteString
 serialize = Base64.encode . toStrict . JSON.encode
