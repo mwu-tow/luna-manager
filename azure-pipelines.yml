@@ -18,4 +18,6 @@ steps:
     apt-get install -y wget build-essential libffi-dev libgmp-dev xz-utils zlib1g-dev git gnupg libzmq3-dev libpng-dev openssl python3-setuptools libssl-dev libtinfo-dev pkg-config python-pip libfuse2
     wget -qO- https://get.haskellstack.org/ | sh
     stack build
+    stack run develop luna-studio
+    stack run develop make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
   displayName: 'Run a multi-line script'
