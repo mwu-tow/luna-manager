@@ -8,7 +8,9 @@
 module Luna.Manager.Component.Analytics (
     MPUserData(..),
     mpRegisterUser,
+    tryMpRegisterUser,
     mpTrackEvent,
+    tryMpTrackEvent,
     userInfoExists
 ) where
 
@@ -243,16 +245,12 @@ serialize :: ToJSON s => s -> ByteString
 serialize = Base64.encode . toStrict . JSON.encode
 
 -- Generic wrapper around Mixpanel requests.
-sendMpRequest :: (LoggerMonad m, ToJSON s, MonadIO m, MonadThrow m, MonadCatch m) => String -> s -> m ()
+sendMpRequest :: (LoggerMonad m, ToJSON s, MonadIO m, MonadThrow m) => String -> s -> m ()
 sendMpRequest endpoint s = do
-    let handler = \(e::SomeException) -> do
-            Logger.log $ convert $  "Caught exception: " <> displayException e
-            return HTTP.defaultRequest
     Logger.log "Analytics.sendMpRequest"
     let payload = serialize s
-    request <- handleAny handler $ do  
-        HTTP.setRequestQueryString [("data", Just payload)] <$> 
-            HTTP.parseRequest endpoint
+    request <- HTTP.setRequestQueryString [("data", Just payload)] <$> 
+                    HTTP.parseRequest endpoint
     liftIO $ void $ HTTP.httpNoBody request
 
 -- Register a new user within Mixpanel.
@@ -275,9 +273,17 @@ mpRegisterUser userInfoPath email = Shelly.unlessM (userInfoExists userInfoPath)
     Logger.log "Done sending the request"
     return ()
 
+tryMpRegisterUser :: (LoggerMonad m, MonadIO m, MonadSetter MPUserData m, MonadThrow m,
+                    MonadShControl m, MonadSh m, MonadBaseControl IO m, MonadCatch m) =>
+                    FilePath -> Text -> m ()
+tryMpRegisterUser eventName = do 
+    let handler = \(e::SomeException) -> do
+            Logger.log $ convert $  "Caught exception: " <> displayException e
+    handleAny handler <$> mpRegisterUser eventName
+
 -- Send a single event to Mixpanel.
 mpTrackEvent :: (LoggerMonad m, MonadIO m, MonadGetters '[MPUserData, Options, EnvConfig] m,
-                 MonadThrow m, MonadSh m, MonadShControl m, MonadCatch m) => Text -> m ()
+                 MonadThrow m, MonadSh m, MonadShControl m) => Text -> m ()
 mpTrackEvent eventName = do
     Logger.log "Analytics.mpTrackEvent"
     uuid <- gets @MPUserData userInfoUUID
@@ -290,3 +296,11 @@ mpTrackEvent eventName = do
     Logger.log "Sending MP request"
     sendMpRequest eventEndpoint mpData
     Logger.log "Done sending MP request"
+
+
+tryMpTrackEvent :: (LoggerMonad m, MonadIO m, MonadGetters '[MPUserData, Options, EnvConfig] m,
+                MonadThrow m, MonadSh m, MonadShControl m, MonadCatch m) => Text -> m ()
+tryMpTrackEvent eventName = do
+    let handler = \(e::SomeException) -> do
+            Logger.log $ convert $  "Caught exception: " <> displayException e
+    handleAny handler $ mpTrackEvent eventName
