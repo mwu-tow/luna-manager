@@ -235,7 +235,7 @@ makeShortcuts packageBinPath appName = when (currentHost == Windows) $ do
         "powershell -inputformat none " <>
         "\"$s=New-Object -ComObject WScript.Shell; $sc=$s.createShortcut(" <>
         "\'" <> encodeString menuPrograms <>
-        "\'');$sc.TargetPath=\'" <> encodeString binAbsPath <>
+        "\');$sc.TargetPath=\'" <> encodeString binAbsPath <>
         "\';$sc.Save()\""
     unless (exitCode == ExitSuccess) $ Logger.warning $ "Menu Start shortcut was not created. Powershell could not be found in the $PATH"
 
@@ -482,8 +482,8 @@ run opts = do
         forM_ install $ \(Initilize.Option (Initilize.Install appName appVersion emailM)) -> do
             Logger.logObject "[run] appName"    appName
             Logger.logObject "[run] appVersion" appVersion
-            Analytics.mpRegisterUser userInfoPath $ fromMaybe "" emailM
-            Analytics.mpTrackEvent "LunaInstaller.Started"
+            Analytics.tryMpRegisterUser userInfoPath $ fromMaybe "" emailM
+            Analytics.tryMpTrackEvent "LunaInstaller.Started"
             appPkg           <- Logger.tryJustWithLog "Install.run" undefinedPackageError $ Map.lookup appName (repo ^. packages)
             evaluatedVersion <- Logger.tryJustWithLog "Install.run" (toException $ VersionException $ convert $ show appVersion) $ Map.lookup appVersion $ appPkg ^. versions --tryJust missingPackageDescriptionError $ Map.lookup currentSysDesc $ snd $ Map.lookup appVersion $ appPkg ^. versions
             appDesc          <- Logger.tryJustWithLog "Install.run" (toException $ MissingPackageDescriptionError appVersion) $ Map.lookup currentSysDesc evaluatedVersion
@@ -501,14 +501,14 @@ run opts = do
             print $ encode $ InstallationProgress 1
             liftIO $ hFlush stdout
             askToRunApp appName (showPretty appVersion) (appPkg ^. appType)
-            Analytics.mpTrackEvent "LunaInstaller.Finished"
+            Analytics.tryMpTrackEvent "LunaInstaller.Finished"
 
         else do
             Shelly.unlessM (userInfoExists userInfoPath) $ do
                 email <- case (opts ^. Opts.selectedUserEmail) of
                     Just e  -> return e
                     Nothing -> askUserEmail
-                Analytics.mpRegisterUser userInfoPath email
+                Analytics.tryMpRegisterUser userInfoPath email
 
             (appName, appPkg) <- askOrUse (opts ^. Opts.selectedComponent)
                 $ question "Select component to be installed" (\t -> choiceValidator' "component" t $ (t,) <$> Map.lookup t (repo ^. packages))
