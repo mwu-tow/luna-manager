@@ -5,6 +5,7 @@ module Luna.Manager.Command.Install where
 
 import Prologue hiding (FilePath, toText, txt, (<.>))
 
+import           Data.List                             (sort)
 import           Luna.Manager.Archive                  as Archive
 import           Luna.Manager.Command.Options          (InstallOpts, Options)
 import qualified Luna.Manager.Command.Options          as Opts
@@ -34,7 +35,7 @@ import           Luna.Manager.System.Path
 import           Control.Concurrent          (forkIO)
 import           Control.Lens.Aeson          ()
 import           Control.Monad.Raise
-import           Control.Monad.State.Layered
+import qualified Control.Monad.State.Layered as State
 import qualified Crypto.Hash                 as Crypto
 import           Data.Aeson                  (encode)
 import qualified Data.Aeson                  as JSON
@@ -129,7 +130,7 @@ makeLenses ''UnresolvedDepsError
 instance Exception UnresolvedDepsError where
     displayException err = "Following dependencies were unable to be resolved: " <> show (showPretty <$> unwrap err)
 
-type MonadInstall m = (MonadGetter Options m, MonadStates '[EnvConfig, InstallConfig, RepoConfig, MPUserData] m, MonadNetwork m, Shelly.MonadSh m, Shelly.MonadShControl m, Logger.LoggerMonad m)
+type MonadInstall m = (State.Getter Options m, State.MonadStates '[EnvConfig, InstallConfig, RepoConfig, MPUserData] m, MonadNetwork m, Shelly.MonadSh m, Shelly.MonadShControl m, Logger.LoggerMonad m)
 
 -- === Utils === --
 
@@ -212,7 +213,7 @@ downloadAndUnpackApp pkgPath installPath appName appType pkgVersion = do
 
 linkingCurrent :: MonadInstall m => AppType -> FilePath -> m ()
 linkingCurrent appType installPath = do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let currentPath = (parent installPath) </> (installConfig ^. selectedVersionPath)
     createSymLinkDirectory installPath currentPath
 
@@ -241,7 +242,7 @@ makeShortcuts packageBinPath appName = when (currentHost == Windows) $ do
 postInstallation :: MonadInstall m => AppType -> FilePath -> Text -> Text -> Text -> m ()
 postInstallation appType installPath binPath appName version = do
     linkingCurrent appType installPath
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     packageBin    <- return $ installPath </> case currentHost of
         Linux   -> convert appName
         Darwin  -> (installConfig ^. mainBinPath) </> convert appName
@@ -265,7 +266,7 @@ postInstallation appType installPath binPath appName version = do
 
 copyResources :: MonadInstall m => AppType -> FilePath -> Text -> m ()
 copyResources appType installPath appName = when (currentHost == Darwin && appType == GuiApp) $ do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let resources        = installPath </> (installConfig ^. mainBinPath) </> (installConfig ^. resourcesPath)
         packageLogo      = resources </> (installConfig ^. logoFileName)
         packageInfoPlist = resources </> (installConfig ^. infoFileName)
@@ -286,7 +287,7 @@ linking src dst = do
 linkingLocalBin :: (MonadInstall m, MonadIO m) => FilePath -> Text -> m ()
 linkingLocalBin currentBin appName = do
     home          <- getHomePath
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     gui           <- Opts.guiInstallerOpt
     case currentHost of
         Windows -> do
@@ -300,7 +301,7 @@ linkingLocalBin currentBin appName = do
 
 stopServices ::MonadInstall m => FilePath -> AppType -> m ()
 stopServices installPath appType = when (currentHost == Windows && appType == GuiApp) $ do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let currentServices = parent installPath </> (installConfig ^. selectedVersionPath) </> (installConfig ^. configPath) </> fromText "windows"
     do
         testservices <- Shelly.test_d currentServices
@@ -308,14 +309,14 @@ stopServices installPath appType = when (currentHost == Windows && appType == Gu
 
 runServices :: MonadInstall m => FilePath -> AppType -> Text -> Text -> m ()
 runServices installPath appType appName version = when (currentHost == Windows && appType == GuiApp) $ do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let services = installPath </> (installConfig ^. configPath) </> fromText "windows"
     logs <- expand $ (installConfig ^. defaultConfPath) </> (installConfig ^. logsFolder) </> fromText appName </> (fromText $ showPretty version)
     runServicesWindows services logs
 
 copyDllFilesOnWindows :: MonadInstall m => FilePath -> m ()
 copyDllFilesOnWindows installPath = when (currentHost == Windows) $ do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let libFolderPath  = installPath </> (installConfig ^. libPath)
         binsFolderPath = installPath </> (installConfig ^. privateBinPath)
     do
@@ -324,14 +325,14 @@ copyDllFilesOnWindows installPath = when (currentHost == Windows) $ do
 
 copyWinSW :: MonadInstall m => FilePath -> m ()
 copyWinSW installPath = when (currentHost == Windows) $ do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let winSW = installPath </> (installConfig ^. thirdParty) </> fromText "WinSW.Net4.exe"
         winConfigFolderPath = installPath </> (installConfig ^. configPath) </> fromText "windows"
     Shelly.mv winSW winConfigFolderPath
 
 registerUninstallInfo :: MonadInstall m => FilePath -> m ()
 registerUninstallInfo installPath = when (currentHost == Windows) $ do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let registerScript = installPath </> (installConfig ^. configPath) </> fromText "windows" </> "registerUninstall.ps1"
         directory      = parent $ parent installPath -- if default, c:\Program Files\
     pkgHasRegister <- Shelly.test_f registerScript
@@ -344,7 +345,7 @@ registerUninstallInfo installPath = when (currentHost == Windows) $ do
 
 moveUninstallScript :: MonadInstall m => FilePath -> m ()
 moveUninstallScript installPath = when (currentHost == Windows) $ do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let uninstallScript = installPath </> (installConfig ^. configPath) </> fromText "windows" </> "uninstallLunaStudio.ps1"
         rootInstallPath = parent installPath
     pkgHasUninstall <- Shelly.test_f uninstallScript
@@ -353,7 +354,7 @@ moveUninstallScript installPath = when (currentHost == Windows) $ do
 
 prepareWindowsPkgForRunning :: MonadInstall m => FilePath -> m ()
 prepareWindowsPkgForRunning installPath = do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     guiInstaller  <- Opts.guiInstallerOpt
     when guiInstaller $ installationProgress 0.7
     copyDllFilesOnWindows installPath
@@ -367,7 +368,7 @@ prepareWindowsPkgForRunning installPath = do
 copyUserConfig :: MonadInstall m => FilePath -> ResolvedPackage -> m ()
 copyUserConfig installPath package = do
     unless (currentHost == Linux) $ Logger.info "Copying user config to ~/.luna"
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let pkgName               = package ^. header . name
         pkgVersion            = showPretty $ package ^. header . version
         packageUserConfigPath = installPath </> "user-config"
@@ -391,9 +392,9 @@ touchApp appPath appType = when (currentHost == Darwin && appType == GuiApp) $ d
 
 -- === Installation utils === --
 
-askLocation :: (MonadStates '[EnvConfig, InstallConfig, RepoConfig] m, MonadNetwork m) => InstallOpts -> AppType -> Text -> m Text
+askLocation :: (State.MonadStates '[EnvConfig, InstallConfig, RepoConfig] m, MonadNetwork m) => InstallOpts -> AppType -> Text -> m Text
 askLocation opts appType appName = do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     let pkgInstallDefPath = case appType of
             GuiApp   -> installConfig ^. defaultBinPathGuiApp
             BatchApp -> installConfig ^. defaultBinPathBatchApp
@@ -404,7 +405,7 @@ askLocation opts appType appName = do
 
 installApp :: MonadInstall m => InstallOpts -> ResolvedPackage -> m ()
 installApp opts package = do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     guiInstaller  <- Opts.guiInstallerOpt
     let pkgName    = package ^. header . name
         appType    = package ^. resolvedAppType
@@ -437,7 +438,7 @@ askUserEmail = liftIO $ do
 
 runApp :: MonadInstall m => Text -> Text -> AppType -> m ()
 runApp appName version appType = do
-    installConfig <- get @InstallConfig
+    installConfig <- State.get @InstallConfig
     installPath <- prepareInstallPath appType (installConfig ^. defaultBinPathGuiApp) appName version
     let runPath = case currentHost of
             Linux   -> installPath </> fromText appName
@@ -469,7 +470,7 @@ askToRunApp appName version appType = when (appType == GuiApp) $ do
 
 run :: MonadInstall m => InstallOpts -> m ()
 run opts = do
-    userInfoPath <- gets @InstallConfig userInfoFile
+    userInfoPath <- State.gets @InstallConfig (view userInfoFile)
     guiInstaller <- Opts.guiInstallerOpt
     repo <- maybe getRepo (parseConfig . convert) (opts ^. Opts.localConfig)
     if guiInstaller then do
@@ -487,7 +488,7 @@ run opts = do
             evaluatedVersion <- Logger.tryJustWithLog "Install.run" (toException $ VersionException $ convert $ show appVersion) $ Map.lookup appVersion $ appPkg ^. versions --tryJust missingPackageDescriptionError $ Map.lookup currentSysDesc $ snd $ Map.lookup appVersion $ appPkg ^. versions
             appDesc          <- Logger.tryJustWithLog "Install.run" (toException $ MissingPackageDescriptionError appVersion) $ Map.lookup currentSysDesc evaluatedVersion
             let (unresolvedLibs, pkgsToInstall) = Repo.resolve repo appDesc
-            when (not $ null unresolvedLibs) $ do
+            when_ (not $ null unresolvedLibs) $ do
                 let e = UnresolvedDepsError unresolvedLibs
                 Logger.exception "Install.run" $ toException e
                 raise' e
@@ -512,7 +513,7 @@ run opts = do
             (appName, appPkg) <- askOrUse (opts ^. Opts.selectedComponent)
                 $ question "Select component to be installed" (\t -> choiceValidator' "component" t $ (t,) <$> Map.lookup t (repo ^. packages))
                 & help   .~ choiceHelp "components" (repo ^. apps)
-                & defArg .~ maybeHead (repo ^. apps)
+                & defArg .~ head (repo ^. apps)
 
             let vmap       = Map.mapMaybe (Map.lookup currentSysDesc) $ appPkg ^. versions
                 filterFunc = if (opts ^. Opts.devInstallation) then const True
@@ -523,10 +524,10 @@ run opts = do
             (appVersion, appPkgDesc) <- askOrUse (opts ^. Opts.selectedVersion)
                 $ question "Select version to be installed" (\t -> choiceValidator "version" t . sequence $ fmap (t,) . flip Map.lookup vmap <$> readPretty t)
                 & help   .~ choiceHelp (appName <> " versions") vss
-                & defArg .~ fmap showPretty (maybeLast vss)
+                & defArg .~ fmap showPretty (last vss)
 
             let (unresolvedLibs, pkgsToInstall) = Repo.resolve repo appPkgDesc
-            when (not $ null unresolvedLibs) . raise' $ UnresolvedDepsError unresolvedLibs
+            when_ (not $ null unresolvedLibs) . raise' $ UnresolvedDepsError unresolvedLibs
 
             version <- readVersion appVersion
             let appsToInstall = filter (( <$> (^. header . name)) (`elem` (repo ^.apps))) pkgsToInstall

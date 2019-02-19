@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeInType #-}
+{-# LANGUAGE TypeInType           #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Control.Monad.Raise (module Control.Monad.Raise, module X) where
@@ -6,22 +6,28 @@ module Control.Monad.Raise (module Control.Monad.Raise, module X) where
 -- FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME
 -- FIXME [WD]: refactor the whole file out before the release
 
-import Prelude
 import Data.Kind
+import Prelude
+
+import Control.Exception as X (Exception, SomeException, toException)
+
+import qualified Control.Exception.Safe      as Exception
+import qualified Control.Monad.State.Layered as State
+import qualified Control.Monad.State.Strict  as S
+
+import Control.Monad               (join)
+import Control.Monad.Catch         (MonadThrow, throwM)
+import Control.Monad.Catch         (MonadCatch (..))
+import Control.Monad.Trans         (MonadTrans, lift)
+import Control.Monad.Trans.Control (ComposeSt (..), MonadBaseControl (..),
+                                    MonadTransControl (..), defaultLiftBaseWith,
+                                    defaultLiftWith, defaultRestoreM,
+                                    defaultRestoreT)
+import Control.Monad.Trans.Except  (ExceptT, runExceptT, throwE)
+import Data.Constraint             (Constraint)
 
 import Control.Lens.Utils
-import Control.Exception   as X (Exception, SomeException, toException)
-import Control.Monad.Catch (MonadThrow, throwM)
-import Control.Monad.Catch        (MonadCatch(..))
-import Control.Monad.State.Layered
-import qualified Control.Monad.State.Strict as S
-import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..), ComposeSt(..),defaultRestoreT, defaultLiftWith, defaultRestoreM, defaultLiftBaseWith)
 
-import Control.Monad              (join)
-import Data.Constraint            (Constraint)
-import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import Control.Monad.Trans        (MonadTrans, lift)
-import qualified Control.Exception.Safe as Exception
 
 -------------------------------
 -- === Exception raising === --
@@ -73,15 +79,15 @@ instance {-# OVERLAPPABLE #-} (Monad m, Exception e) => MonadException e (Except
 instance {-# OVERLAPPABLE #-} (Monad m, Exception e) => MonadException e (ExceptT SomeException m) where raise = throwE . toException
 instance                      (Monad m)              => MonadException SomeException (ExceptT SomeException m) where raise = throwE
 instance                      Exception e            => MonadException e IO where raise = Exception.throwM
-deriving instance MonadCatch m => MonadCatch (StateT t m)
-instance MonadBaseControl b m => MonadBaseControl b (StateT t m) where
-    type StM (StateT t m) a = ComposeSt (StateT t) m a
-    liftBaseWith f   = defaultLiftBaseWith f
-    restoreM         = defaultRestoreM
-instance MonadTransControl (StateT t) where
-    type StT (StateT t) a = StT (S.StateT t) a
-    liftWith = defaultLiftWith StateT (\(StateT s) -> s)
-    restoreT = defaultRestoreT StateT
+-- deriving instance MonadCatch m => MonadCatch (StateT t m)
+-- instance MonadBaseControl b m => MonadBaseControl b (StateT t m) where
+--     type StM (StateT t m) a = ComposeSt (StateT t) m a
+--     liftBaseWith f   = defaultLiftBaseWith f
+--     restoreM         = defaultRestoreM
+-- instance MonadTransControl (StateT t) where
+--     type StT (StateT t) a = StT (S.StateT t) a
+--     liftWith = defaultLiftWith StateT (\(StateT s) -> s)
+--     restoreT = defaultRestoreT StateT
 -- === Utils === --
 
 tryJust :: MonadException e m => e -> Maybe a -> m a

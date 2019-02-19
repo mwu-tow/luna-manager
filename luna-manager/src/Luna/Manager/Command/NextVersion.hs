@@ -6,8 +6,9 @@ import Prologue hiding (FilePath)
 
 import           Control.Exception.Base      (Exception)
 import           Control.Monad.Raise         (tryRight')
-import           Control.Monad.State.Layered
+import qualified Control.Monad.State.Layered as State
 import           Data.Bifunctor              (first, second)
+import           Data.List                   (sort)
 import           Data.Maybe                  (maybeToList)
 import qualified Data.Text                   as Text
 import qualified Data.Text.IO                as Text
@@ -23,12 +24,14 @@ import           Luna.Manager.Network
 import qualified Luna.Manager.Shell.Shelly         as Shelly
 import           Luna.Manager.System.Env
 
+import Control.Lens                  ((?~))
 import Control.Monad.Raise
 import Luna.Manager.Component.Pretty
+
 default (Text.Text)
 
 
-type MonadNextVersion m = (MonadGetter Options m, MonadStates '[EnvConfig, RepoConfig] m, MonadNetwork m, Shelly.MonadSh m, Shelly.MonadShControl m, MonadIO m)
+type MonadNextVersion m = (State.Getter Options m, State.Monad EnvConfig m, State.Monad RepoConfig m, MonadNetwork m, Shelly.MonadSh m, Shelly.MonadShControl m, MonadIO m)
 
 data VersionUpgradeException = VersionUpgradeException Text deriving Show
 
@@ -94,13 +97,13 @@ tagVersion :: MonadNextVersion m => FilePath -> PromotionInfo -> m ()
 tagVersion appPath prInfo = do
     version <- tryRight' $ getNewVersion prInfo
     let versionTxt  = showPretty version
-        tagExists t = not . Text.null <$> Shelly.cmd "git" "tag" "-l" t
+        tagExists t = not . Text.null <$> Shelly.run "git" ["tag", "-l", t]
         tagSource   = if prInfo ^. versionType == Dev
                       then maybeToList $ prInfo ^. commit
                       else [showPretty $ prInfo ^. oldVersion]
 
     Shelly.chdir appPath $ Shelly.unlessM (tagExists versionTxt) $ do
-        Shelly.run_ "git" (["tag", versionTxt] ++ tagSource)
+        Shelly.run_ "git" (["tag", versionTxt] <> tagSource)
 
 createNextVersion :: MonadNextVersion m => FilePath -> TargetVersionType -> Maybe Text -> m PromotionInfo
 createNextVersion cfgPath verType commitM = do

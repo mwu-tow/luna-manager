@@ -5,33 +5,31 @@ module Luna.Manager.System where
 import Prologue hiding (FilePath, appendFile, filter, fromText, null, readFile,
                  toText, (<.>))
 
-import qualified Control.Exception.Safe       as Exception
-import           Control.Monad.Raise
-import           Control.Monad.Trans.Resource (MonadBaseControl)
-import qualified Crypto.Hash                  as Crypto
-import qualified Crypto.Hash.Conduit          as Crypto
-import           Data.ByteString.Lazy         (ByteString, null)
-import           Data.ByteString.Lazy.Char8   (filter, unpack)
-import           Data.List                    (isInfixOf)
-import           Data.Maybe                   (catMaybes, listToMaybe)
-import qualified Data.Text                    as Text
-import           Data.Text.IO                 (appendFile, readFile)
-import qualified Data.Text.IO                 as Text
-import           Filesystem.Path.CurrentOS    (FilePath, encodeString, parent,
-                                               (</>))
-import           System.Directory             (doesDirectoryExist,
-                                               doesPathExist, executable,
-                                               getPermissions, setPermissions)
-import           System.Exit
-import qualified System.FilePath              as Path
-import           System.Process.Typed         as Process
+import Control.Monad.Raise
+import Data.ByteString.Lazy       (ByteString, null)
+import Data.ByteString.Lazy.Char8 (filter, unpack)
+import Data.List                  (isInfixOf)
+import Data.Maybe                 (catMaybes, listToMaybe)
+import Data.Text.IO               (appendFile, readFile)
+import Filesystem.Path.CurrentOS  (FilePath, encodeString, parent, (</>))
+import Luna.Manager.Logger        (LoggerMonad)
+import Luna.Manager.Shell.Shelly  (MonadSh, MonadShControl)
+import System.Directory           (doesDirectoryExist, doesPathExist,
+                                   executable, getPermissions, setPermissions)
 
-import           Luna.Manager.Logger       (LoggerMonad)
+import qualified Control.Exception.Safe    as Exception
+import qualified Crypto.Hash               as Crypto
+import qualified Crypto.Hash.Conduit       as Crypto
+import qualified Data.Text                 as Text
+import qualified Data.Text.IO              as Text
 import qualified Luna.Manager.Logger       as Logger
-import           Luna.Manager.Shell.Shelly (MonadSh, MonadShControl)
 import qualified Luna.Manager.Shell.Shelly as Shelly
-import           Luna.Manager.System.Env
-import           Luna.Manager.System.Host
+import qualified System.FilePath           as Path
+import qualified System.Process.Typed      as Process
+
+import Luna.Manager.System.Env
+import Luna.Manager.System.Host
+import System.Exit
 
 
 ---------------------------
@@ -49,7 +47,7 @@ filterEnters bytestr = res where
 
 callShell :: MonadIO m => Text -> m ByteString
 callShell cmd = do
-    (exitCode, out, err) <- liftIO $ readProcess (shell $ convert cmd)
+    (exitCode, out, err) <- liftIO $ Process.readProcess (Process.shell $ convert cmd)
     return $ filterEnters out
 
 checkIfNotEmpty :: MonadIO m => Text -> m Bool
@@ -102,19 +100,19 @@ getShExportFile = do
     checkedFiles <- mapM runControlCheck files
     return $ listToMaybe $ catMaybes checkedFiles
 
-askToExportPath :: (MonadIO m, MonadBaseControl IO m, LoggerMonad m, MonadCatch m) => FilePath -> m()
+askToExportPath :: (MonadIO m, LoggerMonad m, MonadCatch m) => FilePath -> m()
 askToExportPath pathToExport = do
     liftIO $ Text.putStrLn $ "Do you want to export " <> Shelly.toTextIgnore pathToExport <> "? [yes]/no"
     toExport <- liftIO $ Text.getLine
     when (toExport == "yes" || toExport == "" ) $ exportPath pathToExport
 
-exportPath :: (MonadIO m, MonadBaseControl IO m, LoggerMonad m, MonadCatch m) => FilePath -> m ()
+exportPath :: (MonadIO m, LoggerMonad m, MonadCatch m) => FilePath -> m ()
 exportPath pathToExport = case currentHost of
     Windows -> exportPathWindows pathToExport
     _       -> exportPathUnix pathToExport
 
 --TODO extract common logic for all unix terminals
-exportPathUnix :: (MonadIO m, MonadBaseControl IO m, LoggerMonad m, MonadCatch m) => FilePath -> m ()
+exportPathUnix :: (MonadIO m, LoggerMonad m, MonadCatch m) => FilePath -> m ()
 exportPathUnix pathToExport = do
     pathIsDirectory    <- liftIO $ doesDirectoryExist $ encodeString pathToExport
     properPathToExport <- if pathIsDirectory then return pathToExport else do
@@ -134,7 +132,7 @@ exportPathUnix pathToExport = do
                     (liftIO $ appendFile path exportToAppend)
         Nothing -> warn
 
-exportPathWindows :: (MonadIO m, MonadBaseControl IO m, LoggerMonad m) => FilePath -> m ()
+exportPathWindows :: (MonadIO m, LoggerMonad m) => FilePath -> m ()
 exportPathWindows path = do
     Logger.log "System.exportPathWindows"
     (exitCode1, pathenv, err1) <- Process.readProcess $ "echo %PATH%"

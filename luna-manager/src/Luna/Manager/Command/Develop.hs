@@ -3,7 +3,7 @@
 module Luna.Manager.Command.Develop where
 
 import           Control.Monad.Raise
-import           Control.Monad.State.Layered
+import qualified Control.Monad.State.Layered  as State
 import           Data.Text                    (Text)
 import           Filesystem.Path.CurrentOS    (FilePath, parent, (</>))
 import qualified Luna.Manager.Archive         as Archive
@@ -12,10 +12,9 @@ import           Luna.Manager.Network
 import           Luna.Manager.Shell.Shelly    (MonadSh, MonadShControl)
 import qualified Luna.Manager.Shell.Shelly    as Shelly
 import           Luna.Manager.System.Env
-import           Prologue                     hiding (FilePath)
+import           Prologue                     hiding (FilePath, tryJust)
 import qualified System.Directory             as System
 
-import Control.Monad.Trans.Resource         (MonadBaseControl)
 import Luna.Manager.Command.CreatePackage
 import Luna.Manager.Component.PackageConfig
 import Luna.Manager.Component.Repository
@@ -36,7 +35,7 @@ data DevelopConfig = DevelopConfig { _stackPath      :: Text
                                     }
 makeLenses ''DevelopConfig
 
-type MonadDevelop m = (MonadGetter Options m, MonadStates '[EnvConfig, RepoConfig, PackageConfig, DevelopConfig] m, MonadIO m, MonadException SomeException m, MonadSh m, MonadShControl m, MonadCatch m, MonadBaseControl IO m)
+type MonadDevelop m = (State.Getter Options m, State.MonadStates '[EnvConfig, RepoConfig, PackageConfig, DevelopConfig] m, MonadIO m, MonadException SomeException m, MonadSh m, MonadShControl m, MonadCatch m)
 
 
 instance Monad m => MonadHostConfig DevelopConfig 'Linux arch m where
@@ -66,7 +65,7 @@ downloadAndUnpackStack path = do
     if stackPresent
         then liftIO $ putStrLn "Stack is already installed, skipping"
         else do
-            developConfig <- get @DevelopConfig
+            developConfig <- State.get @DevelopConfig
             let stackURL           = developConfig ^. stackPath
                 totalProgress      = 1.0
                 progressFielsdName = ""
@@ -94,7 +93,7 @@ downloadDeps appName appPath = do
 
 run :: MonadDevelop m => DevelopOpts -> m ()
 run opts = do
-    developCfg <- get @DevelopConfig
+    developCfg <- State.get @DevelopConfig
     let appName  = opts ^. target
     if (opts ^. downloadDependencies) then do
         path <- tryJust (toException PathException) (opts ^. repositoryPath)

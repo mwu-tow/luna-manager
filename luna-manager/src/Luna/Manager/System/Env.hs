@@ -4,13 +4,17 @@ module Luna.Manager.System.Env where
 
 import Prologue hiding (FilePath, fromText, toText)
 
-import           Control.Monad.State.Layered
-import           Filesystem.Path.CurrentOS
-import           Luna.Manager.System.Host
+import qualified Control.Monad.State.Layered as State
 import qualified Shelly.Lifted               as Shelly
 import qualified System.Directory            as System
-import           System.IO.Error             (isAlreadyExistsError)
-import           System.IO.Temp              (createTempDirectory)
+
+import System.IO.Error (isAlreadyExistsError)
+import System.IO.Temp  (createTempDirectory)
+
+import Filesystem.Path.CurrentOS
+import Luna.Manager.System.Host
+
+
 
 --------------------------
 -- === EnvConfig === --
@@ -31,11 +35,11 @@ getHomePath = fromText . convert <$> liftIO System.getHomeDirectory
 getCurrentPath :: MonadIO m => m FilePath
 getCurrentPath = fromText . convert <$> liftIO System.getCurrentDirectory
 
-getTmpPath, getDownloadPath :: (MonadIO m, MonadGetter EnvConfig m) => m FilePath
-getTmpPath      = gets @EnvConfig localTempPath
+getTmpPath, getDownloadPath :: (MonadIO m, State.Getter EnvConfig m) => m FilePath
+getTmpPath      = State.gets @EnvConfig (view localTempPath)
 getDownloadPath = getTmpPath
 
-setTmpCwd :: (MonadGetter EnvConfig m, MonadIO m) => m ()
+setTmpCwd :: (State.Getter EnvConfig m, MonadIO m) => m ()
 setTmpCwd = liftIO . System.setCurrentDirectory . encodeString =<< getTmpPath
 
 createSymLink ::  MonadIO m => FilePath -> FilePath -> m ()
