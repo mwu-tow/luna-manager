@@ -17,6 +17,8 @@ jobs:
   steps:
   - script: |
       ls
+      echo "fooooooo"
+      ls /
       apt-get update
       apt-get install -y wget build-essential libffi-dev libgmp-dev xz-utils zlib1g-dev git gnupg libzmq3-dev libpng-dev openssl python3-setuptools libssl-dev libtinfo-dev pkg-config python-pip libfuse2
       wget -qO- https://get.haskellstack.org/ | sh
