@@ -8,20 +8,28 @@ trigger:
   branches:
     include:
     - "*"
-pool:
-  vmImage: 'Ubuntu-16.04'
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
-
-- script: |
-    pwd
-    sudo apt-get update
-    sudo apt-get install -y wget build-essential libffi-dev libgmp-dev xz-utils zlib1g-dev git gnupg libzmq3-dev libpng-dev openssl python3-setuptools libssl-dev libtinfo-dev pkg-config python-pip libfuse2
-    wget -qO- https://get.haskellstack.org/ | sh
-    stack build
-    stack run develop luna-studio
-    stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
-    cat /home/vsts/luna-develop/apps/luna-studio/build-config/backend/.stack-work/logs/zeromq4-haskell-0.7.0.log
-  displayName: 'Run a multi-line script'
+jobs:
+- job: Ubuntu
+  pool:
+    vmImage: 'Ubuntu-16.04'
+  steps:
+  - script: |
+      pwd
+      sudo apt-get update
+      sudo apt-get install -y wget build-essential libffi-dev libgmp-dev xz-utils zlib1g-dev git gnupg libzmq3-dev libpng-dev openssl python3-setuptools libssl-dev libtinfo-dev pkg-config python-pip libfuse2
+      wget -qO- https://get.haskellstack.org/ | sh
+      stack build
+      stack run develop luna-studio
+      stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
+      cat /home/vsts/luna-develop/apps/luna-studio/build-config/backend/.stack-work/logs/zeromq4-haskell-0.7.0.log
+    displayName: 'Build Linux'
+- job: macOS
+  pool:
+    vmImage: 'macOS-10.13'
+  steps:
+  - script: |
+      curl -sSL https://get.haskellstack.org/ | sh
+      stack build
+      stack run develop luna-studio
+      stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
