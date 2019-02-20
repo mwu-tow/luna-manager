@@ -13,6 +13,7 @@ jobs:
 - job: Ubuntu
   pool:
     vmImage: 'Ubuntu-16.04'
+  container: ubuntu:16.04
   steps:
   - script: |
       pwd
