@@ -16,7 +16,7 @@ jobs:
     vmImage: 'Ubuntu-16.04'
   container: murbanczyk/studio-builder:latest
   variables:
-    DOCKER_BUILD: "true" # required by appimage packing tools
+    DOCKER_BUILD: "yes" # required by appimage packing tools
   steps:
   - script: |
       env
