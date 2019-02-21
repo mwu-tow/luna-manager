@@ -19,6 +19,7 @@ jobs:
     DOCKER_BUILD: "true" # required by appimage packing tools
   steps:
   - script: |
+      env
       ls -l
       stack build
       stack run develop luna-studio
