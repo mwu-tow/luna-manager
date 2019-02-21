@@ -13,7 +13,7 @@ jobs:
 - job: Ubuntu
   pool:
     vmImage: 'Ubuntu-16.04'
-  container: murbanczyk/studio-builder
+  container: murbanczyk/studio-builder:latest
   steps:
   - script: |
       ls -l
