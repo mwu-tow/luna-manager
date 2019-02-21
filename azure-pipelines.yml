@@ -36,6 +36,9 @@ jobs:
   steps:
   - script: |
       curl -sSL https://get.haskellstack.org/ | sh
+      brew sh
+      brew update
+      brew install pkg-config libffi zmq
       stack build
       stack run develop luna-studio
       stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
