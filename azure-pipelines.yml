@@ -30,12 +30,12 @@ jobs:
     inputs:
       pathtoPublish: ~/luna-develop/apps/luna-studio/dist-package
       artifactName: dist
-# - job: macOS
-#   pool:
-#     vmImage: 'macOS-10.13'
-#   steps:
-#   - script: |
-#       curl -sSL https://get.haskellstack.org/ | sh
-#       stack build
-#       stack run develop luna-studio
-#       stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
+- job: macOS
+  pool:
+    vmImage: 'macOS-10.13'
+  steps:
+  - script: |
+      curl -sSL https://get.haskellstack.org/ | sh
+      stack build
+      stack run develop luna-studio
+      stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
