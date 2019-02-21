@@ -25,6 +25,10 @@ jobs:
       stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
 #      cat /home/vsts/luna-develop/apps/luna-studio/build-config/backend/.stack-work/logs/zeromq4-haskell-0.7.0.log
     displayName: 'Build Linux'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: ~/luna-develop/apps/luna-studio/dist-package
+      artifactName: dist
 # - job: macOS
 #   pool:
 #     vmImage: 'macOS-10.13'
