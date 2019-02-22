@@ -29,8 +29,12 @@ jobs:
     displayName: 'Build Linux'
   - task: PublishBuildArtifacts@1
     inputs:
-      pathtoPublish: ~/luna-develop/apps/luna-studio/dist-package
+      pathtoPublish: /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package
       artifactName: dist
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: $(Build.ArtifactStagingDirectory)
+      artifactName: dist2
 - job: macOS
   pool:
     vmImage: 'macOS-10.13'
