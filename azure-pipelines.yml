@@ -14,9 +14,9 @@ jobs:
   timeoutInMinutes: 0
   pool:
     vmImage: 'Ubuntu-16.04'
-  container: murbanczyk/studio-builder:latest
-  variables:
-    DOCKER_BUILD: "yes" # required by appimage packing tools
+  container:
+    image: murbanczyk/studio-builder:latest
+    options: --cap-add SYS_ADMIN --cap-add MKNOD --device=/dev/fuse --security-opt apparmor:unconfined
   steps:
   - script: |
       env
@@ -36,7 +36,6 @@ jobs:
   steps:
   - script: |
       curl -sSL https://get.haskellstack.org/ | sh
-      brew sh
       brew update
       brew install pkg-config libffi zmq
       stack build
