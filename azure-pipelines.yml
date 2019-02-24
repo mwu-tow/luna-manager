@@ -18,14 +18,19 @@ jobs:
     image: murbanczyk/studio-builder:latest
     options: --cap-add SYS_ADMIN --cap-add MKNOD --device=/dev/fuse --security-opt apparmor:unconfined
   steps:
-  - script: |
-      env
-      ls -l
-      sudo apt-get install -y fuse
-      stack build
-      stack run develop luna-studio
-      stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
+  - script: >
+      pwd
+      && env
+      && ls -l
+      && sudo apt-get install -y fuse
+      && stack build
+      && stack run develop luna-studio
+      && stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
+      && ls -la /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package
+      && echo "=========================================================================="
+      && ls -laR /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package
 #      cat /home/vsts/luna-develop/apps/luna-studio/build-config/backend/.stack-work/logs/zeromq4-haskell-0.7.0.log
+
     displayName: 'Build Linux'
   - task: PublishBuildArtifacts@1
     inputs:
