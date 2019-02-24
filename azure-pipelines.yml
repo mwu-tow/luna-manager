@@ -45,7 +45,7 @@ jobs:
       pathtoPublish: $(Build.ArtifactStagingDirectory)
       artifactName: dist2
 - job: macOS
-  timeoutInMinutes: 066
+  timeoutInMinutes: 0
   pool:
     vmImage: 'macOS-10.13'
   steps:
