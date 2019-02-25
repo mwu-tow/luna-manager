@@ -33,7 +33,6 @@ jobs:
       && mkdir $(Build.ArtifactStagingDirectory)/AppImage
       && cp    ~/luna-develop/apps/luna-studio/dist-package/appimage/out/* $(Build.ArtifactStagingDirectory)/AppImage/
       && cp -r ~/luna-develop/apps/luna-studio/dist-package/luna-studio/   $(Build.ArtifactStagingDirectory)/luna-studio
-      && cp    ~/luna-develop/apps/luna-studio/dist-package/luna-studio/   $(Build.ArtifactStagingDirectory)/luna-studio
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: $(Build.ArtifactStagingDirectory)/AppImage
