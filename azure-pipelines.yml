@@ -26,28 +26,22 @@ jobs:
       && env
       && ls -l
       && sudo apt-get install -y fuse
-      && stack build
       && stack run develop luna-studio
       && stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
-      && ls -la /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package
       && echo "=========================================================================="
       && ls -laR /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package
-      && cp /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package/appimage/out/* $(Build.ArtifactStagingDirectory)
+      && cp    ~/luna-develop/apps/luna-studio/dist-package/appimage/out/* $(Build.ArtifactStagingDirectory)/AppImage
+      && cp -r ~/luna-develop/apps/luna-studio/dist-package/luna-studio/   $(Build.ArtifactStagingDirectory)/luna-studio
   - task: PublishBuildArtifacts@1
     inputs:
-      pathtoPublish: $(Build.ArtifactStagingDirectory)
-      artifactName: dist2
+      pathtoPublish: $(Build.ArtifactStagingDirectory)/AppImage
+      artifactName: Linux AppImage
     displayName: 'Upload artifacts'
     continueOnError: true
   - task: PublishBuildArtifacts@1
     inputs:
-      pathtoPublish: "/home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package/appimage/out/luna-studio-linux-2.0.AppImage"
-      artifactName: dist0
-    continueOnError: true
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package/appimage/out
-      artifactName: dist1
+      pathtoPublish: $(Build.ArtifactStagingDirectory)/luna-studio
+      artifactName: Linux Luna Studio dist package
     continueOnError: true
 - job: macOS
   timeoutInMinutes: 0
@@ -64,10 +58,14 @@ jobs:
       && stack --version
       && stack run develop luna-studio
       && stack run make-package ~/luna-develop/apps/luna-studio/luna-package.yaml 2.0
-      && ls /Users/vsts/luna-develop/apps/luna-studio/
-      && ls /Users/vsts/luna-develop/apps/luna-studio/dist
+      && cp -r ~/luna-develop/apps/luna-studio/dist-package   $(Build.ArtifactStagingDirectory)/luna-studio
   - task: PublishBuildArtifacts@1
     inputs:
-      pathtoPublish: /home/vsts_azpcontainer/luna-develop/apps/luna-studio/dist-package/appimage/out
+      pathtoPublish: ~/luna-develop/apps/luna-studio/dist-package
       artifactName: DarwinArtifact
+    continueOnError: true
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: $(Build.ArtifactStagingDirectory)/luna-studio
+      artifactName: DarwinArtifact2
     continueOnError: true
