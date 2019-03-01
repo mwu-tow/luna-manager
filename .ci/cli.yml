@@ -5,6 +5,9 @@
 
 trigger:
   batch: true
+  branches:
+    include:
+    - "*"
 
 jobs:
 - job: Linux
